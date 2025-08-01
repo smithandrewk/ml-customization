@@ -1,3 +1,4 @@
-*.hdf5
-1_labeled/
-data/
+.env
+experiments/
+__pycache__/
+*.pt
