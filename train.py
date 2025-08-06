@@ -1,34 +1,59 @@
+"""
+train test split across sessions for multiple participants
+"""
 import os
+import json
+from tqdm import tqdm
+from time import time
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import torch
-import json
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+import numpy as np
+
 from sklearn.model_selection import train_test_split
-from tqdm import tqdm
-import os
-import pandas as pd
-import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import precision_score, recall_score, f1_score
+
 from utils import *
-import argparse
 from dotenv import load_dotenv
 
 load_dotenv()
 
-parser = argparse.ArgumentParser(description='Train a smoking detection model')
-parser.add_argument('--participant_code', type=str, default='all', help='Participant code to train on (default: all)')
-args = parser.parse_args()
-participant_code = args.participant_code
+labeling = f'andrew smoking labels'
 
-labeling = f'smoking'
 fs = 50
 window_size_seconds = 60
 window_stride_seconds = 60
 window_size = fs * window_size_seconds
 window_stride = fs * window_stride_seconds
 
+experiments = os.listdir('experiments')
+
+if len(experiments) == 0:
+    next_experiment = 1
+else:
+    next_experiment = max([int(exp.split('_')[0]) for exp in experiments if os.path.isdir(os.path.join('experiments', exp))]) + 1
+
+hyperparameters = {
+    'window_size': 3000,  # Size of the input window
+    'num_features': 3,  # Number of features in the input data
+    'batch_size': 512,  # Batch size for training and evaluation
+    'learning_rate': 3e-4,  # Learning rate for the optimizer
+    'weight_decay': 1e-4,  # Weight decay for regularization
+    'num_epochs': 5000,  # Maximum number of training epochs
+    'patience': 40,  # Early stopping patience,
+    'experiment_name': f"{next_experiment}"
+}
+
+experiment_name = hyperparameters['experiment_name']
+os.makedirs(f'experiments/{experiment_name}', exist_ok=True)
+
 projects = []
 
-for participant_code in ['kerry']:
+for participant_code in ['P01','P02','P03']:
     participant_id = get_participant_id(participant_code)
     participant_projects = get_participant_projects(participant_id)
     if len(participant_projects) == 0:
@@ -71,54 +96,21 @@ X_train = torch.cat(X_train)
 y_train = torch.cat(y_train)
 X_test = torch.cat(X_test)
 y_test = torch.cat(y_test)
-torch.save((X_train,y_train),'train.pt')
-torch.save((X_test,y_test),'test.pt')
+torch.save((X_train,y_train),f'experiments/{experiment_name}/train.pt')
+torch.save((X_test,y_test),f'experiments/{experiment_name}/test.pt')
 
 print(f"Train dataset saved with shape: {X_train.shape}, {y_train.shape}")
 print("Label distribution in train set:", y_train.long().bincount())
 print(f"Test dataset saved with shape: {X_test.shape}, {y_test.shape}")
 print("Label distribution in test set:", y_test.long().bincount())
 
-
-from sympy import hyper
-import torch
-import numpy as np
-import torch
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import precision_score, recall_score, f1_score
-import pandas as pd
-import matplotlib.pyplot as plt
-from tqdm import tqdm
-import os
-from time import time
-
-experiments = os.listdir('experiments')
-
-if len(experiments) == 0:
-    next_experiment = 1
-else:
-    next_experiment = max([int(exp.split('_')[0]) for exp in experiments if os.path.isdir(os.path.join('experiments', exp))]) + 1
-
-hyperparameters = {
-    'window_size': 3000,  # Size of the input window
-    'num_features': 3,  # Number of features in the input data
-    'batch_size': 512,  # Batch size for training and evaluation
-    'learning_rate': 3e-4,  # Learning rate for the optimizer
-    'weight_decay': 1e-4,  # Weight decay for regularization
-    'num_epochs': 5000,  # Maximum number of training epochs
-    'patience': 15,  # Early stopping patience,
-    'experiment_name': f"{next_experiment}_{participant_code}"
-}
-
-device = 'mps'
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
 model = SmokingCNN(window_size=hyperparameters['window_size'], num_features=hyperparameters['num_features'])
 criterion = nn.BCEWithLogitsLoss()
 optimizer = optim.AdamW(model.parameters(), lr=hyperparameters['learning_rate'], weight_decay=hyperparameters['weight_decay'])
-trainloader = DataLoader(TensorDataset(*torch.load(f'train.pt')), batch_size=hyperparameters['batch_size'], shuffle=True)
-testloader = DataLoader(TensorDataset(*torch.load(f'test.pt')), batch_size=hyperparameters['batch_size'], shuffle=False)
+trainloader = DataLoader(TensorDataset(*torch.load(f'experiments/{experiment_name}/train.pt')), batch_size=hyperparameters['batch_size'], shuffle=True)
+testloader = DataLoader(TensorDataset(*torch.load(f'experiments/{experiment_name}/test.pt')), batch_size=hyperparameters['batch_size'], shuffle=False)
 
 trainlossi = []
 testlossi = []
@@ -129,8 +121,6 @@ n_epochs_without_improvement = 0
 min_test_loss = float('inf')
 max_test_f1 = 0.0
 max_target_f1 = 0.0
-experiment_name = hyperparameters['experiment_name']
-os.makedirs(f'experiments/{experiment_name}', exist_ok=True)
 
 model.to(device)
 
