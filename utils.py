@@ -209,9 +209,14 @@ def make_windowed_dataset_from_sessions(sessions, window_size, window_stride, pr
             end = bout['end']
             accelerometer_df.loc[(accelerometer_df['ns_since_reboot'] >= start) & (accelerometer_df['ns_since_reboot'] <= end), 'label'] = 1
 
+        if 'accel_x' not in accelerometer_df.columns or 'accel_y' not in accelerometer_df.columns or 'accel_z' not in accelerometer_df.columns:
+            print(accelerometer_df.columns)
+            # rename columns to match expected names
+            accelerometer_df.rename(columns={'x': 'accel_x', 'y': 'accel_y', 'z': 'accel_z'}, inplace=True)
         data = torch.tensor(accelerometer_df[['accel_x', 'accel_y', 'accel_z','label']].values, dtype=torch.float32)
 
         if data.shape[0] < window_size:
+            # TODO: zero pad the data to window size
             print(f"Skipping session {session_name} due to insufficient data length: {data.shape[0]} < {window_size}")
             continue
 
@@ -287,7 +292,7 @@ def get_verified_and_not_deleted_sessions(project_name, labeling):
     # Fetch all rows from the executed query
     rows = cursor.fetchall()
     conn.close()
-    data = {'sessions': [{'session_name': row[0], 'bouts': [b for b in json.loads(row[1]) if b['label'] == labeling]} for row in rows]}
+    data = {'sessions': [{'session_name': row[0], 'bouts': [b for b in json.loads(row[1]) if type(b) == dict and b.get('label') == labeling]} for row in rows]}
 
     return data
 
