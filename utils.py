@@ -398,3 +398,15 @@ class SmokingCNN(nn.Module):
         x = self.classifier(x)
         
         return x
+    
+def get_projects_from_participant_codes(participant_codes):
+    projects = []
+    for participant_code in participant_codes:
+        participant_id = get_participant_id(participant_code)
+        participant_projects = get_participant_projects(participant_id)
+        if len(participant_projects) == 0:
+            print(f"No projects found for participant {participant_code}.")
+            continue
+        print(f"Participant {participant_code} has projects: {participant_projects}")
+        projects.extend(participant_projects)
+    return projects

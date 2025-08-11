@@ -51,16 +51,7 @@ hyperparameters = {
 experiment_name = hyperparameters['experiment_name']
 os.makedirs(f'experiments/{experiment_name}', exist_ok=True)
 
-projects = []
-
-for participant_code in ['P01','P02','P03']:
-    participant_id = get_participant_id(participant_code)
-    participant_projects = get_participant_projects(participant_id)
-    if len(participant_projects) == 0:
-        print(f"No projects found for participant {participant_code}.")
-        continue
-    print(f"Participant {participant_code} has projects: {participant_projects}")
-    projects.extend(participant_projects)
+projects = get_projects_from_participant_codes(['P01','P02','P03','P04','P05','P06','P07','P08'])
 
 print(projects)
 
