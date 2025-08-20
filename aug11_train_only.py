@@ -38,7 +38,7 @@ hyperparameters = {
     'weight_decay': 1e-4,
     'num_epochs': 5000,
     'patience': 40,
-    'experiment_name': "1"
+    'experiment_name': "2"
     }
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
