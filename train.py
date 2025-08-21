@@ -1,57 +1,52 @@
 """
-train test split across sessions for multiple participants
+Train test split across sessions for multiple participants
 """
 import os
-import json
-from tqdm import tqdm
 from time import time
 
-import pandas as pd
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
 
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import precision_score, recall_score, f1_score
+from sklearn.metrics import f1_score
 
-from utils import *
+from utils import load_config, get_experiment_dir, plot_training_progress, SmokingCNN
 from dotenv import load_dotenv
 
 load_dotenv()
 
-fs = 50
-window_size_seconds = 60
-window_stride_seconds = 60
-window_size = fs * window_size_seconds
-window_stride = fs * window_stride_seconds
-
-
-hyperparameters = {
-    'window_size': 3000,
-    'num_features': 3,
-    'batch_size': 512,
-    'learning_rate': 3e-4,
-    'weight_decay': 1e-4,
-    'num_epochs': 5000,
-    'patience': 40,
-    'experiment_name': "2"
-    }
+# Load configuration
+config = load_config()
+experiment_dir = get_experiment_dir(config)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-# Create experiment directory if it doesn't exist
-os.makedirs(f'experiments/{hyperparameters["experiment_name"]}', exist_ok=True)
+os.makedirs(experiment_dir, exist_ok=True)
 
-model = SmokingCNN(window_size=hyperparameters['window_size'], num_features=hyperparameters['num_features'])
+model = SmokingCNN(
+    window_size=config['model']['window_size'], 
+    num_features=config['model']['num_features']
+)
 criterion = nn.BCEWithLogitsLoss()
-optimizer = optim.AdamW(model.parameters(), lr=hyperparameters['learning_rate'], weight_decay=hyperparameters['weight_decay'])
-trainloader = DataLoader(TensorDataset(*torch.load(f'experiments/{hyperparameters["experiment_name"]}/train.pt')), batch_size=hyperparameters['batch_size'], shuffle=True)
-testloader = DataLoader(TensorDataset(*torch.load(f'experiments/{hyperparameters["experiment_name"]}/test.pt')), batch_size=hyperparameters['batch_size'], shuffle=False)
+optimizer = optim.AdamW(
+    model.parameters(), 
+    lr=config['training']['learning_rate'], 
+    weight_decay=config['training']['weight_decay']
+)
+
+trainloader = DataLoader(
+    TensorDataset(*torch.load(f'{experiment_dir}/train.pt')), 
+    batch_size=config['training']['batch_size'], 
+    shuffle=True
+)
+testloader = DataLoader(
+    TensorDataset(*torch.load(f'{experiment_dir}/test.pt')), 
+    batch_size=config['training']['batch_size'], 
+    shuffle=False
+)
 
 # Get dataset sizes
 train_dataset_size = len(trainloader.dataset)
@@ -77,7 +72,7 @@ max_test_f1 = 0.0
 
 model.to(device)
 
-for epoch in range(hyperparameters['num_epochs']):
+for epoch in range(config['training']['num_epochs']):
     epoch_start_time = time()
     model.train()
 
@@ -131,20 +126,20 @@ for epoch in range(hyperparameters['num_epochs']):
                 testlossi=testlossi,
                 trainf1i=trainf1i,
                 testf1i=testf1i,
-                ma_window_size=5,
-                save_path=f'experiments/{hyperparameters["experiment_name"]}/loss.jpg',
+                ma_window_size=config['visualization']['ma_window_size'],
+                save_path=f'{experiment_dir}/loss.{config["visualization"]["plot_format"]}',
             )
 
         ## Early Stopping Logic on F1 Score
         if testf1i[-1] > max_test_f1:
             max_test_f1 = testf1i[-1]
-            torch.save(model.state_dict(), f'experiments/{hyperparameters["experiment_name"]}/best_model_base_f1.pt')
+            torch.save(model.state_dict(), f'{experiment_dir}/best_model_base_f1.pt')
             print(f"Epoch {epoch}: New best model saved with test F1 score {max_test_f1:.4f}")
             n_epochs_without_improvement = 0
         else:
             print(f"Epoch {epoch}: No improvement in test F1 score ({testf1i[-1]:.4f} vs {max_test_f1:.4f})")
             n_epochs_without_improvement += 1
-        if n_epochs_without_improvement >= hyperparameters['patience']:
+        if n_epochs_without_improvement >= config['training']['patience']:
             print(f"Early stopping triggered after {n_epochs_without_improvement} epochs without improvement.")
             break
             
@@ -158,20 +153,20 @@ for epoch in range(hyperparameters['num_epochs']):
 # Final model save with training summary
 print(f"\nTraining completed!")
 print(f"Best F1 Score achieved: {max_test_f1:.4f}")
-print(f"Final model saved to: experiments/{hyperparameters['experiment_name']}/last.pt")
+print(f"Final model saved to: {experiment_dir}/last.pt")
 
-torch.save(model.state_dict(),f'experiments/{hyperparameters["experiment_name"]}/last.pt')
+torch.save(model.state_dict(), f'{experiment_dir}/last.pt')
 
 metrics = {
     'train_loss': trainlossi,
     'test_loss': testlossi,
     'train_f1': trainf1i,
     'test_f1': testf1i,
-    'hyperparameters': hyperparameters,
+    'config': config,
     'best_f1': max_test_f1,
     'train_samples': train_dataset_size,
     'test_samples': test_dataset_size,
     'total_samples': train_dataset_size + test_dataset_size
 }
 
-torch.save(metrics, f'experiments/{hyperparameters["experiment_name"]}/metrics.pt')
+torch.save(metrics, f'{experiment_dir}/metrics.pt')

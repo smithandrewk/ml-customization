@@ -1,0 +1,44 @@
+# ML Customization Training Configuration
+
+# Dataset Configuration
+dataset:
+  fs: 50  # Sampling frequency (Hz)
+  window_size_seconds: 60  # Window size in seconds
+  window_stride_seconds: 60  # Window stride in seconds
+  labeling: "andrew smoking labels"  # Label type to use
+  test_size: 0.2  # Train/test split ratio
+
+# Model Configuration
+model:
+  window_size: 3000  # Calculated: fs * window_size_seconds
+  num_features: 3  # Number of input features (accel_x, accel_y, accel_z)
+  
+# Training Hyperparameters
+training:
+  batch_size: 256
+  learning_rate: 0.0003  # 3e-4
+  weight_decay: 0.0001   # 1e-4
+  num_epochs: 5000
+  patience: 40  # Early stopping patience
+  
+# Experiment Configuration
+experiment:
+  name: "3"
+  save_dir: "experiments"
+  
+# Participants Configuration
+participants:
+  - "tonmoy"
+
+# Specific project names (if needed to override participant-based discovery)
+# projects:
+#   - "tonmoy_phase1_imported_20250814_155103"
+#   - "tonmoy_phase2_imported_20250814_155151" 
+#   - "tonmoy_phase3_imported_20250814_155204_imported_20250818_161026"
+
+# Visualization Configuration
+visualization:
+  ma_window_size: 5  # Moving average window size for plots
+  save_plots: true
+  plot_format: "jpg"
+  dpi: 300
