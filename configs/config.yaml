@@ -22,11 +22,10 @@ training:
   learning_rate: 0.0003  # 3e-4
   weight_decay: 0.0001   # 1e-4
   num_epochs: 5000
-  patience: 20  # Early stopping patience
   
   # Customization training parameters
-  base_patience: 40      # Early stopping patience for base training phase
-  custom_patience: 40    # Early stopping patience for customization phase
+  base_patience: 20      # Early stopping patience for base training phase
+  custom_patience: 20    # Early stopping patience for customization phase
   custom_learning_rate: 0.0003  # Lower LR for fine-tuning (10x lower than base)
   
 # Participants Configuration

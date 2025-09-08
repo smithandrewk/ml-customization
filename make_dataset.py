@@ -79,17 +79,36 @@ for participant in config['participants']:
         # Store session data for summary
         session_data[project_name] = sessions
 
-        train_sessions, test_sessions = train_test_split(
-            sessions, 
-            test_size=config['dataset']['test_size'], 
-            random_state=42
-        )
+        # Generate train/val/test splits for all participants
+        # train.py will decide how to use them based on target vs base
+        is_target_participant = True  # All participants get 3-way split
         
-        # Store train/test splits for summary
-        train_test_splits[project_name] = (train_sessions, test_sessions)
+        if is_target_participant:
+            # 3-way split for target participants: 60% train, 20% val, 20% test
+            train_sessions, temp_sessions = train_test_split(
+                sessions, 
+                test_size=0.4,  # 40% for val+test
+                random_state=42
+            )
+            val_sessions, test_sessions = train_test_split(
+                temp_sessions,
+                test_size=0.5,  # 50% of 40% = 20% total for test
+                random_state=42
+            )
+            # Store 3-way split for target participants
+            train_test_splits[project_name] = (train_sessions, val_sessions, test_sessions)
+            print(f"Target participant split - Train: {len(train_sessions)}, Val: {len(val_sessions)}, Test: {len(test_sessions)}")
+        else:
+            # 2-way split for base participants: train/test (test serves as validation)
+            train_sessions, test_sessions = train_test_split(
+                sessions, 
+                test_size=config['dataset']['test_size'], 
+                random_state=42
+            )
+            # Store 2-way split for base participants (val = test)
+            train_test_splits[project_name] = (train_sessions, test_sessions, test_sessions)
+            print(f"Base participant split - Train: {len(train_sessions)}, Test/Val: {len(test_sessions)}")
         
-        print(f"Train sessions: {len(train_sessions)}, Test sessions: {len(test_sessions)}")
-
         # Create windowed datasets for training data
         X, y = make_windowed_dataset_from_sessions(
             train_sessions, 
@@ -102,9 +121,27 @@ for participant in config['participants']:
         participant_X_train.append(X)
         participant_y_train.append(y)
 
+        # Create windowed datasets for validation data (only for target participants)
+        if is_target_participant and len(train_test_splits[project_name]) == 3:
+            val_sessions = train_test_splits[project_name][1]  # Get validation sessions
+            X_val, y_val = make_windowed_dataset_from_sessions(
+                val_sessions, 
+                config['dataset']['window_size'], 
+                config['dataset']['window_stride'], 
+                raw_dataset_path, 
+                config['dataset']['labeling'],
+                config.get('sensors')
+            )
+            if 'participant_X_val' not in locals():
+                participant_X_val = []
+                participant_y_val = []
+            participant_X_val.append(X_val)
+            participant_y_val.append(y_val)
+
         # Create windowed datasets for test data
+        test_sessions_for_data = train_test_splits[project_name][-1]  # Last element is always test
         X, y = make_windowed_dataset_from_sessions(
-            test_sessions, 
+            test_sessions_for_data, 
             config['dataset']['window_size'], 
             config['dataset']['window_stride'], 
             raw_dataset_path, 
@@ -121,25 +158,52 @@ for participant in config['participants']:
         participant_X_test = torch.cat(participant_X_test)
         participant_y_test = torch.cat(participant_y_test)
 
+        # Handle validation data for target participants
+        has_validation = 'participant_X_val' in locals() and participant_X_val
+        if has_validation:
+            participant_X_val = torch.cat(participant_X_val)
+            participant_y_val = torch.cat(participant_y_val)
+
         # Save participant-specific files
         torch.save((participant_X_train, participant_y_train), f'{experiment_dir}/{participant}_train.pt')
         torch.save((participant_X_test, participant_y_test), f'{experiment_dir}/{participant}_test.pt')
+        
+        files_saved = [f'{participant}_train.pt', f'{participant}_test.pt']
+        if has_validation:
+            torch.save((participant_X_val, participant_y_val), f'{experiment_dir}/{participant}_val.pt')
+            files_saved.append(f'{participant}_val.pt')
 
         # Store for summary
-        all_participant_data[participant] = {
+        summary_data = {
             'train_samples': len(participant_X_train),
             'test_samples': len(participant_X_test),
             'train_positive': torch.bincount(participant_y_train.long()),
             'test_positive': torch.bincount(participant_y_test.long())
         }
+        
+        if has_validation:
+            summary_data.update({
+                'val_samples': len(participant_X_val),
+                'val_positive': torch.bincount(participant_y_val.long())
+            })
+        
+        all_participant_data[participant] = summary_data
 
         print(f"Participant {participant}:")
         print(f"  Train samples: {len(participant_X_train):,}")
+        if has_validation:
+            print(f"  Val samples: {len(participant_X_val):,}")
         print(f"  Test samples: {len(participant_X_test):,}")
         print(f"  Train class distribution: {torch.bincount(participant_y_train.long())}")
+        if has_validation:
+            print(f"  Val class distribution: {torch.bincount(participant_y_val.long())}")
         print(f"  Test class distribution: {torch.bincount(participant_y_test.long())}")
-        print(f"  Files saved: {participant}_train.pt, {participant}_test.pt")
+        print(f"  Files saved: {', '.join(files_saved)}")
         print()
+        
+        # Reset validation variables for next participant
+        if 'participant_X_val' in locals():
+            del participant_X_val, participant_y_val
 
 print(f"\n✅ Participant-specific dataset creation complete!")
 print(f"   💾 Files saved in: {experiment_dir}")
