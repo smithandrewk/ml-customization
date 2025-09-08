@@ -1,4 +1,5 @@
 import os
+import argparse
 import torch
 from sklearn.model_selection import train_test_split
 from utils import (
@@ -12,21 +13,49 @@ from utils import (
     generate_dataset_summary
 )
 
+def get_next_dataset_dir(name):
+    """Get next auto-incrementing dataset directory."""
+    os.makedirs('data', exist_ok=True)
+    
+    # Find highest existing number
+    existing = [d for d in os.listdir('data') if os.path.isdir(f'data/{d}')]
+    numbers = []
+    for d in existing:
+        if '_' in d:
+            try:
+                num = int(d.split('_')[0])
+                numbers.append(num)
+            except ValueError:
+                continue
+    
+    next_num = max(numbers) + 1 if numbers else 1
+    dataset_dir = f'data/{next_num:03d}_{name}'
+    os.makedirs(dataset_dir, exist_ok=True)
+    return dataset_dir
+
+# Parse command line arguments
+parser = argparse.ArgumentParser(description='Create participant-specific smoking detection dataset')
+parser.add_argument('--config', type=str, default='configs/config.yaml', help='Path to config file')
+parser.add_argument('--name', type=str, required=True, help='Dataset name (will be prefixed with auto-incrementing number)')
+args = parser.parse_args()
+
 # Load configuration
-config = load_config()
-experiment_dir = get_experiment_dir(config)
+config = load_config(args.config)
+experiment_dir = get_next_dataset_dir(args.name)
 
-X_train = []
-y_train = []
-X_test = []
-y_test = []
-
-# Track session data and splits for summary
+# Track session data and splits for summary (across all participants)
 session_data = {}
 train_test_splits = {}
+all_participant_data = {}
 
 for participant in config['participants']:
     print(f"Processing participant: {participant}")
+    
+    # Initialize participant-specific lists
+    participant_X_train = []
+    participant_y_train = []
+    participant_X_test = []
+    participant_y_test = []
     
     # Get participant_id from participant code
     participant_id = get_participant_id(participant)
@@ -41,8 +70,12 @@ for participant in config['participants']:
         raw_dataset_path = get_raw_dataset_path(project_name)
 
         sessions = get_sessions_for_project(project_name)
-        sessions = [s for s in sessions if s.get('keep') != 0]
+        sessions = [s for s in sessions if s.get('keep') != 0 and s.get('smoking_verified') == 1]
 
+        if len (sessions) == 0:
+            print(f"  No valid sessions found for project {project_name}, skipping.")
+            continue
+        
         # Store session data for summary
         session_data[project_name] = sessions
 
@@ -57,62 +90,83 @@ for participant in config['participants']:
         
         print(f"Train sessions: {len(train_sessions)}, Test sessions: {len(test_sessions)}")
 
+        # Create windowed datasets for training data
         X, y = make_windowed_dataset_from_sessions(
             train_sessions, 
             config['dataset']['window_size'], 
             config['dataset']['window_stride'], 
             raw_dataset_path, 
-            config['dataset']['labeling']
+            config['dataset']['labeling'],
+            config.get('sensors')
         )
-        X_train.append(X)
-        y_train.append(y)
+        participant_X_train.append(X)
+        participant_y_train.append(y)
 
+        # Create windowed datasets for test data
         X, y = make_windowed_dataset_from_sessions(
             test_sessions, 
             config['dataset']['window_size'], 
             config['dataset']['window_stride'], 
             raw_dataset_path, 
-            config['dataset']['labeling']
+            config['dataset']['labeling'],
+            config.get('sensors')
         )
-        X_test.append(X)
-        y_test.append(y)
+        participant_X_test.append(X)
+        participant_y_test.append(y)
 
-X_train = torch.cat(X_train)
-y_train = torch.cat(y_train)
-X_test = torch.cat(X_test)
-y_test = torch.cat(y_test)
+    # Concatenate all projects for this participant
+    if participant_X_train:  # Check if participant has any data
+        participant_X_train = torch.cat(participant_X_train)
+        participant_y_train = torch.cat(participant_y_train)
+        participant_X_test = torch.cat(participant_X_test)
+        participant_y_test = torch.cat(participant_y_test)
 
-print(f"X_train samples: {len(X_train)}, y_train samples: {len(y_train)}, X_test samples: {len(X_test)}, y_test samples: {len(y_test)}")
-print(f"y_train bincount: {torch.bincount(y_train.long())}, y_test bincount: {torch.bincount(y_test.long())}")
-print(f"y_train proportion: {torch.bincount(y_train.long())/len(y_train)}, y_test proportion: {torch.bincount(y_test.long())/len(y_test)}")
+        # Save participant-specific files
+        torch.save((participant_X_train, participant_y_train), f'{experiment_dir}/{participant}_train.pt')
+        torch.save((participant_X_test, participant_y_test), f'{experiment_dir}/{participant}_test.pt')
 
-os.makedirs(experiment_dir, exist_ok=True)
-torch.save((X_train, y_train), f'{experiment_dir}/train.pt')
-torch.save((X_test, y_test), f'{experiment_dir}/test.pt')
+        # Store for summary
+        all_participant_data[participant] = {
+            'train_samples': len(participant_X_train),
+            'test_samples': len(participant_X_test),
+            'train_positive': torch.bincount(participant_y_train.long()),
+            'test_positive': torch.bincount(participant_y_test.long())
+        }
 
-# Generate comprehensive dataset summary
-print("\n" + "="*80)
-print("GENERATING DATASET SUMMARY")
-print("="*80)
+        print(f"Participant {participant}:")
+        print(f"  Train samples: {len(participant_X_train):,}")
+        print(f"  Test samples: {len(participant_X_test):,}")
+        print(f"  Train class distribution: {torch.bincount(participant_y_train.long())}")
+        print(f"  Test class distribution: {torch.bincount(participant_y_test.long())}")
+        print(f"  Files saved: {participant}_train.pt, {participant}_test.pt")
+        print()
 
-summary_results = generate_dataset_summary(
-    config=config,
-    session_data=session_data,
-    train_test_splits=train_test_splits,
-    X_train=X_train,
-    y_train=y_train,
-    X_test=X_test,
-    y_test=y_test,
-    save_dir=experiment_dir
-)
+print(f"\n✅ Participant-specific dataset creation complete!")
+print(f"   💾 Files saved in: {experiment_dir}")
+print(f"\n📊 Summary by participant:")
 
-print(f"\n✅ Dataset creation and summary complete!")
-print(f"   💾 Tensors saved: {experiment_dir}/train.pt, {experiment_dir}/test.pt")
-print(f"   📊 Summary files saved in: {experiment_dir}")
-print(f"\n📈 Quick Stats:")
-print(f"   • Total samples: {len(X_train) + len(X_test):,}")
-print(f"   • Train/Test: {len(X_train):,} / {len(X_test):,}")
-print(f"   • Class balance: {summary_results['summary_stats']['windowed_data_summary']['overall_positive_percentage']:.1f}% positive")
-print(f"   • Projects processed: {len(session_data)}")
-print(f"   • Sessions processed: {sum(len(sessions) for sessions in session_data.values())}")
-print(f"\n💡 Review the detailed summary files for complete dataset statistics!")
+total_train_samples = 0
+total_test_samples = 0
+
+for participant, data in all_participant_data.items():
+    train_pos = data['train_positive'][1] if len(data['train_positive']) > 1 else 0
+    test_pos = data['test_positive'][1] if len(data['test_positive']) > 1 else 0
+    train_total = data['train_samples']
+    test_total = data['test_samples']
+    
+    total_train_samples += train_total
+    total_test_samples += test_total
+    
+    print(f"  • {participant}: {train_total:,} train, {test_total:,} test")
+    print(f"    - Train: {train_pos}/{train_total} ({train_pos/train_total*100:.1f}% positive)")
+    print(f"    - Test: {test_pos}/{test_total} ({test_pos/test_total*100:.1f}% positive)")
+
+print(f"\n💡 Total across all participants:")
+print(f"   • Training samples: {total_train_samples:,}")
+print(f"   • Test samples: {total_test_samples:,}")
+print(f"\n🔄 Usage examples:")
+print(f"   # Train on single participant")
+print(f"   python3 train.py --dataset_dir {experiment_dir} --participant tonmoy")
+print(f"   ")
+print(f"   # Train on all participants (concatenated)")
+print(f"   python3 train.py --dataset_dir {experiment_dir}")

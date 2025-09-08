@@ -18,6 +18,17 @@ load_dotenv()
 Configuration and database utils
 """
 
+def resample(df,target_hz=50):
+    df = df.copy()
+    df['timestamp'] = pd.to_datetime(df['ns_since_reboot'], unit='ns')
+    df = df.set_index('timestamp')
+    freq = f'{1000//target_hz}ms'  # 20ms for 50Hz
+    df_resampled = df.resample(freq).mean().ffill()
+    df_resampled = df_resampled.reset_index()
+    df_resampled['ns_since_reboot'] = df_resampled['timestamp'].astype('int64')
+    df = df_resampled.drop('timestamp', axis=1)
+    return df
+
 def load_config(config_path="config.yaml"):
     """Load configuration from YAML file."""
     with open(config_path, 'r') as file:
@@ -30,11 +41,63 @@ def load_config(config_path="config.yaml"):
     # Update model window_size to match dataset
     config['model']['window_size'] = config['dataset']['window_size']
     
+    # Calculate num_features based on enabled sensors
+    num_features = 0
+    if config.get('sensors', {}).get('use_accelerometer', True):  # Default to True for backward compatibility
+        num_features += 3
+    if config.get('sensors', {}).get('use_gyroscope', False):  # Default to False for backward compatibility
+        num_features += 3
+    
+    # Ensure at least one sensor is enabled
+    if num_features == 0:
+        raise ValueError("At least one sensor (accelerometer or gyroscope) must be enabled")
+    
+    config['model']['num_features'] = num_features
+    
     return config
 
 def get_experiment_dir(config):
     """Get the experiment directory path."""
     return os.path.join(config['experiment']['save_dir'], config['experiment']['name'])
+
+def get_next_experiment_dir(dataset_name, experiment_type="train"):
+    """Get next auto-incrementing experiment directory with dataset name.
+    
+    Format: experiments/{global_index:03d}_{dataset_name}_{dataset_exp_index:03d}/
+    
+    Args:
+        dataset_name: Name of dataset (e.g., "tonmoy_60s", extracted from data/001_tonmoy_60s/)
+        experiment_type: Type of experiment ("train", "custom", etc.)
+    """
+    os.makedirs('experiments', exist_ok=True)
+    
+    # Find highest global experiment number
+    existing_dirs = [d for d in os.listdir('experiments') if os.path.isdir(f'experiments/{d}')]
+    global_numbers = []
+    dataset_numbers = []
+    
+    for d in existing_dirs:
+        if '_' in d and len(d.split('_')) >= 3:
+            try:
+                parts = d.split('_')
+                global_num = int(parts[0])
+                global_numbers.append(global_num)
+                
+                # Check if this experiment uses the same dataset
+                if dataset_name in d:
+                    dataset_exp_num = int(parts[-1])
+                    dataset_numbers.append(dataset_exp_num)
+                    
+            except (ValueError, IndexError):
+                continue
+    
+    next_global_num = max(global_numbers) + 1 if global_numbers else 1
+    next_dataset_num = max(dataset_numbers) + 1 if dataset_numbers else 1
+    
+    experiment_dir = f'experiments/{next_global_num:03d}_{dataset_name}_{next_dataset_num:03d}'
+    os.makedirs(experiment_dir, exist_ok=True)
+    
+    return experiment_dir
 
 @contextmanager
 def db_connection():
@@ -250,20 +313,44 @@ def plot_training_progress(trainlossi, testlossi, targetlossi=None, trainf1i=Non
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
 
-def load_data(raw_dataset_path, session_name, start_ns=None, stop_ns=None):
-    """Load accelerometer data for a specific session, optionally filtered by time range"""
+def load_data(raw_dataset_path, session_name, sensor_config=None, start_ns=None, stop_ns=None):
+    """Load sensor data for a specific session, optionally filtered by time range"""
     try:
+        # Default sensor config for backward compatibility
+        if sensor_config is None:
+            sensor_config = {'use_accelerometer': True, 'use_gyroscope': False}
         
         # Try exact match first
         session_path = os.path.join(raw_dataset_path, session_name.split('.')[0])
         
-        print(f"Trying session path: {session_path}")
-        accelerometer_path = os.path.join(session_path, 'accelerometer_data.csv')
+        df = None
         
-        # Load using n_rows and offset with start_ns and stop_ns if provided
-        df = pd.read_csv(accelerometer_path)
-        if 'accel_x' not in df.columns:
-            df.rename(columns={'x': 'accel_x', 'y': 'accel_y', 'z': 'accel_z'}, inplace=True)
+        # Load accelerometer data if enabled
+        if sensor_config.get('use_accelerometer', True):
+            accelerometer_path = os.path.join(session_path, 'accelerometer_data.csv')
+            accel_df = pd.read_csv(accelerometer_path)
+            if 'accel_x' not in accel_df.columns:
+                accel_df.rename(columns={'x': 'accel_x', 'y': 'accel_y', 'z': 'accel_z'}, inplace=True)
+            df = accel_df
+        
+        # Load gyroscope data if enabled
+        if sensor_config.get('use_gyroscope', False):
+            gyroscope_path = os.path.join(session_path, 'gyroscope_data.csv')
+            gyro_df = pd.read_csv(gyroscope_path)
+            if 'gyro_x' not in gyro_df.columns:
+                gyro_df.rename(columns={'x': 'gyro_x', 'y': 'gyro_y', 'z': 'gyro_z'}, inplace=True)
+            
+            if df is not None:
+                # Merge accelerometer and gyroscope data using merge_asof on nearest timestamp
+                df = pd.merge_asof(df.sort_values('ns_since_reboot'), 
+                                 gyro_df.sort_values('ns_since_reboot'),
+                                 on='ns_since_reboot', 
+                                 direction='nearest')
+            else:
+                df = gyro_df
+        
+        if df is None:
+            raise ValueError("No sensors enabled in sensor_config")
         
         # Filter by time range if provided
         if start_ns is not None and stop_ns is not None:
@@ -276,9 +363,20 @@ def load_data(raw_dataset_path, session_name, start_ns=None, stop_ns=None):
         print(f"Error loading data for session {session_name}: {e}")
         return None
     
-def make_windowed_dataset_from_sessions(sessions, window_size, window_stride, raw_dataset_path, labeling='andrew smoking labels'):
+def make_windowed_dataset_from_sessions(sessions, window_size, window_stride, raw_dataset_path, labeling='andrew smoking labels', sensor_config=None):
     X = []
     y = []
+
+    # Default sensor config for backward compatibility
+    if sensor_config is None:
+        sensor_config = {'use_accelerometer': True, 'use_gyroscope': False}
+
+    # Determine which columns to use based on sensor config
+    sensor_columns = []
+    if sensor_config.get('use_accelerometer', True):
+        sensor_columns.extend(['accel_x', 'accel_y', 'accel_z'])
+    if sensor_config.get('use_gyroscope', False):
+        sensor_columns.extend(['gyro_x', 'gyro_y', 'gyro_z'])
 
     for session in sessions:
         session_name = session['session_name']
@@ -286,7 +384,9 @@ def make_windowed_dataset_from_sessions(sessions, window_size, window_stride, ra
         stop_ns = session.get('stop_ns')
         bouts = [b for b in session['bouts'] if b['label'] == labeling]
 
-        df = load_data(raw_dataset_path, session_name, start_ns, stop_ns)
+        df = load_data(raw_dataset_path, session_name, sensor_config, start_ns, stop_ns)
+        df = resample(df)
+        
         df['label'] = 0
 
         for bout in bouts:
@@ -294,10 +394,19 @@ def make_windowed_dataset_from_sessions(sessions, window_size, window_stride, ra
             end = bout['end']
             df.loc[(df['ns_since_reboot'] >= start) & (df['ns_since_reboot'] <= end), 'label'] = 1
 
-        if 'accel_x' not in df.columns or 'accel_y' not in df.columns or 'accel_z' not in df.columns:
-            df.rename(columns={'x': 'accel_x', 'y': 'accel_y', 'z': 'accel_z'}, inplace=True)
+        # Ensure backward compatibility for column naming
+        if 'accel_x' not in df.columns and sensor_config.get('use_accelerometer', True):
+            if 'x' in df.columns:
+                df.rename(columns={'x': 'accel_x', 'y': 'accel_y', 'z': 'accel_z'}, inplace=True)
 
-        data = torch.tensor(df[['accel_x', 'accel_y', 'accel_z','label']].values, dtype=torch.float32)
+        # Select only the columns we need based on sensor config
+        data_columns = sensor_columns + ['label']
+        missing_columns = [col for col in data_columns if col not in df.columns]
+        if missing_columns:
+            print(f"Warning: Missing columns {missing_columns} in session {session_name}")
+            continue
+
+        data = torch.tensor(df[data_columns].values, dtype=torch.float32)
 
         if data.shape[0] < window_size:
             # Zero pad the data to window size
@@ -471,59 +580,200 @@ def evaluate(model, dataloader, device):
 from torch.nn.functional import relu
 import torch.nn as nn
 
+# class SmokingCNN(nn.Module):
+#     def __init__(self, window_size=100, num_features=6):
+#         super(SmokingCNN, self).__init__()
+        
+#         # Use larger kernel sizes and dilated convolutions for much larger receptive field
+#         self.c1 = nn.Conv1d(in_channels=num_features, out_channels=16, kernel_size=7, padding=3)
+#         self.pool1 = nn.MaxPool1d(kernel_size=2, stride=2)  # Reduce sequence length by half
+        
+#         self.c2 = nn.Conv1d(in_channels=16, out_channels=32, kernel_size=7, padding=3)
+#         self.pool2 = nn.MaxPool1d(kernel_size=2, stride=2)  # Reduce sequence length by half again
+        
+#         # Dilated convolutions to capture long-range dependencies
+#         self.c3 = nn.Conv1d(in_channels=32, out_channels=64, kernel_size=7, padding=6, dilation=2)
+#         self.c4 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=7, padding=12, dilation=4)
+#         self.c5 = nn.Conv1d(in_channels=128, out_channels=256, kernel_size=7, padding=24, dilation=8)
+        
+#         # Additional layers for even more context
+#         self.c6 = nn.Conv1d(in_channels=256, out_channels=512, kernel_size=5, padding=2)
+#         self.c7 = nn.Conv1d(in_channels=512, out_channels=256, kernel_size=3, padding=1)
+        
+#         # Global average pooling and classifier
+#         self.global_pool = nn.AdaptiveAvgPool1d(1)
+#         self.classifier = nn.Sequential(
+#             nn.Linear(256, 128),
+#             nn.ReLU(),
+#             nn.Dropout(0.5),
+#             nn.Linear(128, 1)
+#         )
+    
+#     def forward(self, x):
+#         # First conv block with pooling
+#         x = relu(self.c1(x))
+#         x = self.pool1(x)
+        
+#         x = relu(self.c2(x))
+#         x = self.pool2(x)
+        
+#         # Dilated convolutions for long-range dependencies
+#         x = relu(self.c3(x))
+#         x = relu(self.c4(x))
+#         x = relu(self.c5(x))
+        
+#         # Additional processing
+#         x = relu(self.c6(x))
+#         x = relu(self.c7(x))
+        
+#         # Global pooling and classification
+#         x = self.global_pool(x)
+#         x = x.squeeze(-1)  # Remove the last dimension
+#         x = self.classifier(x)
+        
+#         return x
+    
+class ResidualBlock(nn.Module):
+    """RegNet-style residual block with bottleneck design for 1D time series."""
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1):
+        super(ResidualBlock, self).__init__()
+        
+        # Bottleneck design: reduce -> process -> expand
+        bottleneck_channels = out_channels // 4
+        
+        self.conv1 = nn.Conv1d(in_channels, bottleneck_channels, kernel_size=1)
+        self.bn1 = nn.BatchNorm1d(bottleneck_channels)
+        
+        self.conv2 = nn.Conv1d(bottleneck_channels, bottleneck_channels, kernel_size=kernel_size, 
+                               stride=stride, padding=kernel_size//2)
+        self.bn2 = nn.BatchNorm1d(bottleneck_channels)
+        
+        self.conv3 = nn.Conv1d(bottleneck_channels, out_channels, kernel_size=1)
+        self.bn3 = nn.BatchNorm1d(out_channels)
+        
+        # Skip connection
+        self.skip = None
+        if in_channels != out_channels or stride != 1:
+            self.skip = nn.Sequential(
+                nn.Conv1d(in_channels, out_channels, kernel_size=1, stride=stride),
+                nn.BatchNorm1d(out_channels)
+            )
+    
+    def forward(self, x):
+        identity = x
+        
+        out = relu(self.bn1(self.conv1(x)))
+        out = relu(self.bn2(self.conv2(out)))
+        out = self.bn3(self.conv3(out))
+        
+        if self.skip is not None:
+            identity = self.skip(x)
+            
+        out += identity
+        return relu(out)
+
 class SmokingCNN(nn.Module):
-    def __init__(self, window_size=100, num_features=6):
+    """RegNet-inspired CNN for smoking detection from time series data."""
+    def __init__(self, window_size=3000, num_features=6):
         super(SmokingCNN, self).__init__()
         
-        # Use larger kernel sizes and dilated convolutions for much larger receptive field
-        self.c1 = nn.Conv1d(in_channels=num_features, out_channels=16, kernel_size=7, padding=3)
-        self.pool1 = nn.MaxPool1d(kernel_size=2, stride=2)  # Reduce sequence length by half
+        # Initial stem layer
+        self.stem = nn.Sequential(
+            nn.Conv1d(num_features, 32, kernel_size=7, padding=3),
+            nn.BatchNorm1d(32),
+            nn.ReLU(inplace=True)
+        )
         
-        self.c2 = nn.Conv1d(in_channels=16, out_channels=32, kernel_size=7, padding=3)
-        self.pool2 = nn.MaxPool1d(kernel_size=2, stride=2)  # Reduce sequence length by half again
+        # Stage 1: 32 channels, high resolution (no pooling)
+        self.stage1 = nn.Sequential(
+            ResidualBlock(32, 32, kernel_size=7),
+            ResidualBlock(32, 32, kernel_size=7)
+        )
         
-        # Dilated convolutions to capture long-range dependencies
-        self.c3 = nn.Conv1d(in_channels=32, out_channels=64, kernel_size=7, padding=6, dilation=2)
-        self.c4 = nn.Conv1d(in_channels=64, out_channels=128, kernel_size=7, padding=12, dilation=4)
-        self.c5 = nn.Conv1d(in_channels=128, out_channels=256, kernel_size=7, padding=24, dilation=8)
+        # Stage 2: 64 channels, 2x downsampled  
+        self.pool1 = nn.MaxPool1d(kernel_size=2, stride=2)
+        self.stage2 = nn.Sequential(
+            ResidualBlock(32, 64, kernel_size=5),
+            ResidualBlock(64, 64, kernel_size=5),
+            ResidualBlock(64, 64, kernel_size=5)
+        )
         
-        # Additional layers for even more context
-        self.c6 = nn.Conv1d(in_channels=256, out_channels=512, kernel_size=5, padding=2)
-        self.c7 = nn.Conv1d(in_channels=512, out_channels=256, kernel_size=3, padding=1)
+        # Stage 3: 128 channels, 4x downsampled total
+        self.pool2 = nn.MaxPool1d(kernel_size=2, stride=2)  
+        self.stage3 = nn.Sequential(
+            ResidualBlock(64, 128, kernel_size=5),
+            ResidualBlock(128, 128, kernel_size=5),
+            ResidualBlock(128, 128, kernel_size=5)
+        )
+        
+        # Stage 4: 256 channels, 8x downsampled total
+        self.pool3 = nn.MaxPool1d(kernel_size=2, stride=2)
+        self.stage4 = nn.Sequential(
+            ResidualBlock(128, 256, kernel_size=3),
+            ResidualBlock(256, 256, kernel_size=3)
+        )
         
         # Global average pooling and classifier
         self.global_pool = nn.AdaptiveAvgPool1d(1)
-        self.classifier = nn.Sequential(
-            nn.Linear(256, 128),
-            nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(128, 1)
-        )
+        self.dropout = nn.Dropout(0.5)
+        self.classifier = nn.Linear(256, 1)
     
     def forward(self, x):
-        # First conv block with pooling
-        x = relu(self.c1(x))
+        x = self.stem(x)
+        
+        x = self.stage1(x)
         x = self.pool1(x)
         
-        x = relu(self.c2(x))
+        x = self.stage2(x)
         x = self.pool2(x)
         
-        # Dilated convolutions for long-range dependencies
-        x = relu(self.c3(x))
-        x = relu(self.c4(x))
-        x = relu(self.c5(x))
+        x = self.stage3(x) 
+        x = self.pool3(x)
         
-        # Additional processing
-        x = relu(self.c6(x))
-        x = relu(self.c7(x))
+        x = self.stage4(x)
         
-        # Global pooling and classification
         x = self.global_pool(x)
-        x = x.squeeze(-1)  # Remove the last dimension
+        x = x.squeeze(-1)  # Remove sequence dimension
+        x = self.dropout(x)
         x = self.classifier(x)
         
         return x
+def calculate_positive_ratio(y_tensor):
+    """Calculate the ratio of positive samples in the dataset."""
+    positive_count = torch.sum(y_tensor).item()
+    total_count = len(y_tensor)
+    return positive_count / total_count if total_count > 0 else 0.0
+
+def init_final_layer_bias_for_imbalance(model, positive_ratio):
+    """Initialize final layer bias based on class distribution (Karpathy technique).
     
+    This eliminates the 'hockey stick' training curve by initializing the final layer
+    bias to the log-odds of the positive class ratio.
+    
+    Args:
+        model: The neural network model
+        positive_ratio: Fraction of positive samples in training data (0-1)
+    """
+    if positive_ratio <= 0 or positive_ratio >= 1:
+        print(f"Warning: Invalid positive ratio {positive_ratio:.4f}, skipping bias initialization")
+        return
+    
+    # Calculate log-odds for bias initialization
+    bias_init = np.log(positive_ratio / (1 - positive_ratio))
+    
+    # Find the final linear layer in the model
+    final_layer = None
+    for module in reversed(list(model.modules())):
+        if isinstance(module, nn.Linear):
+            final_layer = module
+            break
+    
+    if final_layer is not None:
+        final_layer.bias.data.fill_(bias_init)
+        print(f"✅ Initialized final layer bias to {bias_init:.4f} (positive ratio: {positive_ratio:.4f})")
+    else:
+        print("Warning: Could not find final linear layer for bias initialization")
+
 def get_projects_from_participant_codes(participant_codes):
     projects = []
     for participant_code in participant_codes:

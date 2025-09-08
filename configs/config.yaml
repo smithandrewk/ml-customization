@@ -8,33 +8,32 @@ dataset:
   labeling: "andrew smoking labels"  # Label type to use
   test_size: 0.2  # Train/test split ratio
 
+# Sensor Configuration
+sensors:
+  use_accelerometer: true   # Include accelerometer data (accel_x, accel_y, accel_z)
+  use_gyroscope: true       # Include gyroscope data (gyro_x, gyro_y, gyro_z)
+
 # Model Configuration
-model:
-  window_size: 3000  # Calculated: fs * window_size_seconds
-  num_features: 3  # Number of input features (accel_x, accel_y, accel_z)
-  
+model: {}  # Parameters computed automatically from dataset config
+
 # Training Hyperparameters
 training:
-  batch_size: 256
+  batch_size: 512
   learning_rate: 0.0003  # 3e-4
   weight_decay: 0.0001   # 1e-4
   num_epochs: 5000
-  patience: 40  # Early stopping patience
+  patience: 20  # Early stopping patience
   
-# Experiment Configuration
-experiment:
-  name: "3"
-  save_dir: "experiments"
+  # Customization training parameters
+  base_patience: 40      # Early stopping patience for base training phase
+  custom_patience: 40    # Early stopping patience for customization phase
+  custom_learning_rate: 0.0003  # Lower LR for fine-tuning (10x lower than base)
   
 # Participants Configuration
 participants:
   - "tonmoy"
-
-# Specific project names (if needed to override participant-based discovery)
-# projects:
-#   - "tonmoy_phase1_imported_20250814_155103"
-#   - "tonmoy_phase2_imported_20250814_155151" 
-#   - "tonmoy_phase3_imported_20250814_155204_imported_20250818_161026"
+  - "asfik"
+  - "ejaz"
 
 # Visualization Configuration
 visualization:
