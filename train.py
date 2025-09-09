@@ -410,7 +410,7 @@ base_valf1i_phase2 = []
 
 # Phase 2 early stopping variables
 custom_n_epochs_without_improvement = 0
-custom_max_test_f1 = 0.0
+custom_max_val_f1 = 0.0
 custom_patience = config['training'].get('custom_patience', config['training'].get('patience', 10) // 2)
 
 print(f"Starting Phase 2 customization with LR={custom_lr}, patience={custom_patience}")
@@ -551,14 +551,14 @@ for epoch in range(config['training']['num_epochs']):
             custom_labels=phase2_labels
         )
 
-    # Phase 2 early stopping (based on target test performance)
-    if custom_target_testf1i[-1] > custom_max_test_f1:
-        custom_max_test_f1 = custom_target_testf1i[-1]
+    # Phase 2 early stopping (based on target validation performance)
+    if custom_target_valf1i[-1] > custom_max_val_f1:
+        custom_max_val_f1 = custom_target_valf1i[-1]
         torch.save(model.state_dict(), f'{experiment_dir}/customized_model.pt')
-        print(f"Phase 2 Epoch {epoch}: New best customized model saved with target F1 score {custom_max_test_f1:.4f}")
+        print(f"Phase 2 Epoch {epoch}: New best customized model saved with target val F1 score {custom_max_val_f1:.4f}")
         custom_n_epochs_without_improvement = 0
     else:
-        print(f"Phase 2 Epoch {epoch}: No improvement ({custom_target_testf1i[-1]:.4f} vs {custom_max_test_f1:.4f})")
+        print(f"Phase 2 Epoch {epoch}: No improvement ({custom_target_valf1i[-1]:.4f} vs {custom_max_val_f1:.4f})")
         custom_n_epochs_without_improvement += 1
 
     if custom_n_epochs_without_improvement >= custom_patience:
@@ -573,7 +573,72 @@ for epoch in range(config['training']['num_epochs']):
           f"Train F1: {custom_trainf1i[-1]:.4f}, Target Val F1: {custom_target_valf1i[-1]:.4f}, Target Test F1: {custom_target_testf1i[-1]:.4f}. "
           f"Epochs without improvement: {custom_n_epochs_without_improvement}")
 
-print(f"\nPhase 2 completed! Best target F1 score: {custom_max_test_f1:.4f}")
+print(f"\nPhase 2 completed! Best target validation F1 score: {custom_max_val_f1:.4f}")
+
+# =============================================================================
+# FINAL MODEL EVALUATION
+# =============================================================================
+print("\n" + "="*60)
+print("FINAL MODEL EVALUATION")
+print("="*60)
+
+# Evaluate Phase 1 best model on target test set
+print("Evaluating Phase 1 best model (base training) on target test set...")
+model.load_state_dict(torch.load(f'{experiment_dir}/base_model.pt'))
+model.eval()
+
+base_model_test_preds = []
+base_model_test_labels = []
+base_model_test_losses = []
+
+with torch.no_grad():
+    for Xi, yi in target_testloader:
+        Xi, yi = Xi.to(device), yi.to(device).float()
+        outputs = model(Xi).squeeze()
+        loss = criterion(outputs, yi)
+        
+        base_model_test_preds.append((outputs.sigmoid() > 0.5).float())
+        base_model_test_labels.append(yi)
+        base_model_test_losses.append(loss.item())
+
+base_model_test_preds = torch.cat(base_model_test_preds).cpu()
+base_model_test_labels = torch.cat(base_model_test_labels).cpu()
+base_model_test_f1 = f1_score(base_model_test_labels, base_model_test_preds, average='macro', zero_division=0)
+
+print(f"Phase 1 best model test F1: {base_model_test_f1:.4f}")
+
+# Evaluate Phase 2 best model on target test set
+print("Evaluating Phase 2 best model (customized) on target test set...")
+model.load_state_dict(torch.load(f'{experiment_dir}/customized_model.pt'))
+model.eval()
+
+custom_model_test_preds = []
+custom_model_test_labels = []
+custom_model_test_losses = []
+
+with torch.no_grad():
+    for Xi, yi in target_testloader:
+        Xi, yi = Xi.to(device), yi.to(device).float()
+        outputs = model(Xi).squeeze()
+        loss = criterion(outputs, yi)
+        
+        custom_model_test_preds.append((outputs.sigmoid() > 0.5).float())
+        custom_model_test_labels.append(yi)
+        custom_model_test_losses.append(loss.item())
+
+custom_model_test_preds = torch.cat(custom_model_test_preds).cpu()
+custom_model_test_labels = torch.cat(custom_model_test_labels).cpu()
+custom_model_test_f1 = f1_score(custom_model_test_labels, custom_model_test_preds, average='macro', zero_division=0)
+
+print(f"Phase 2 best model test F1: {custom_model_test_f1:.4f}")
+
+# Calculate improvements
+absolute_improvement = custom_model_test_f1 - base_model_test_f1
+percentage_improvement = (absolute_improvement / base_model_test_f1 * 100) if base_model_test_f1 > 0 else 0.0
+
+print(f"\nPerformance Improvement:")
+print(f"  • Absolute improvement: {absolute_improvement:+.4f}")
+print(f"  • Percentage improvement: {percentage_improvement:+.2f}%")
 
 # Save Phase 2 metrics
 custom_metrics = {
@@ -583,7 +648,11 @@ custom_metrics = {
     'train_f1': custom_trainf1i,
     'target_val_f1': custom_target_valf1i,
     'target_test_f1': custom_target_testf1i,
-    'best_target_f1': custom_max_test_f1,
+    'best_target_val_f1': custom_max_val_f1,
+    'base_model_test_f1': base_model_test_f1,
+    'custom_model_test_f1': custom_model_test_f1,
+    'absolute_improvement': absolute_improvement,
+    'percentage_improvement': percentage_improvement,
     'target_participant': args.target_participant,
     'combined_train_samples': sum(base_train_info.values()) + sum(target_train_info.values()),
     'target_val_samples': sum(target_val_info.values()),
@@ -603,12 +672,17 @@ print(f"Target participant: {args.target_participant}")
 print(f"Base participants: {base_participants}")
 print(f"\nPhase 1 (Base Training):")
 print(f"  • Best validation F1 on base participants: {base_max_val_f1:.4f}")
+print(f"  • Test F1 on target participant: {base_model_test_f1:.4f}")
 print(f"  • Training samples: {sum(base_train_info.values()):,}")
 
 print(f"\nPhase 2 (Customization):")
-print(f"  • Best F1 on target participant: {custom_max_test_f1:.4f}")
-print(f"  • Improvement: {custom_max_test_f1 - base_max_val_f1:+.4f}")
+print(f"  • Best validation F1 on target participant: {custom_max_val_f1:.4f}")
+print(f"  • Test F1 on target participant: {custom_model_test_f1:.4f}")
 print(f"  • Training samples: {sum(base_train_info.values()) + sum(target_train_info.values()):,}")
+
+print(f"\nFinal Performance Improvement:")
+print(f"  • Absolute improvement: {absolute_improvement:+.4f}")
+print(f"  • Percentage improvement: {percentage_improvement:+.2f}%")
 
 # Create final combined visualization with separate base and target validation curves
 # Combine both phases into single arrays with proper indexing
@@ -681,15 +755,20 @@ Dataset Information:
 
 Phase 1 Results (Base Training):
   • Best Validation F1 Score: {base_max_val_f1:.4f}
+  • Test F1 on Target Participant: {base_model_test_f1:.4f}
   • Epochs trained: {len(base_trainf1i)}
   • Early stopping patience: {base_patience}
 
 Phase 2 Results (Customization):
-  • Best Target F1 Score: {custom_max_test_f1:.4f}
-  • Improvement over base: {custom_max_test_f1 - base_max_val_f1:+.4f}
+  • Best Validation F1 Score: {custom_max_val_f1:.4f}
+  • Test F1 on Target Participant: {custom_model_test_f1:.4f}
   • Epochs trained: {len(custom_trainf1i)}
   • Learning rate: {custom_lr}
   • Early stopping patience: {custom_patience}
+
+Performance Improvement:
+  • Absolute improvement: {absolute_improvement:+.4f}
+  • Percentage improvement: {percentage_improvement:+.2f}%
 
 Files Generated:
   • base_model.pt - Best model from Phase 1
@@ -704,4 +783,4 @@ with open(f'{experiment_dir}/results_summary.txt', 'w') as f:
 
 print(f"\n✅ Two-phase training complete!")
 print(f"   📁 Results saved in: {experiment_dir}")
-print(f"   📈 Performance improvement: {custom_max_test_f1 - base_max_val_f1:+.4f} F1 score")
+print(f"   📈 Performance improvement: {absolute_improvement:+.4f} F1 score ({percentage_improvement:+.2f}%)")
