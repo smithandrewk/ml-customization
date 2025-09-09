@@ -8,7 +8,7 @@ from time import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset, ConcatDataset
+from torch.utils.data import DataLoader, TensorDataset, ConcatDataset, WeightedRandomSampler
 import numpy as np
 
 from sklearn.metrics import f1_score
@@ -26,10 +26,34 @@ parser.add_argument('--target_participant', type=str, required=True, help='Parti
 parser.add_argument('--experiment_suffix', type=str, help='Suffix for experiment name (default: custom_{target_participant})')
 parser.add_argument('--model', type=str, default='full', choices=['full', 'simple'], help='Model architecture: full (RegNet-style) or simple (3-layer for testing)')
 parser.add_argument('--early_stopping_metric', type=str, default='f1', choices=['f1', 'loss'], help='Metric for early stopping: f1 (maximize F1) or loss (minimize loss)')
+parser.add_argument('--target_weight', type=float, help='Weight multiplier for target samples in Phase 2 (overrides config, default: 1.0 = equal weighting)')
 args = parser.parse_args()
 
 # Load configuration
 config = load_config(args.config)
+
+# Override target weight if specified via command line
+if args.target_weight is not None:
+    config['training']['target_weight_multiplier'] = args.target_weight
+    print(f"Overriding target weight multiplier from config: {args.target_weight}")
+
+target_weight_multiplier = config['training']['target_weight_multiplier']
+
+# Validate target weight multiplier
+if target_weight_multiplier < 0:
+    raise ValueError(f"target_weight_multiplier must be >= 0, got {target_weight_multiplier}")
+
+# Provide warnings and guidance for edge cases
+if target_weight_multiplier == 0.0:
+    print("⚠️  WARNING: target_weight=0.0 will exclude target data entirely")
+    print("   This effectively runs Phase 1 training with Phase 2 validation")
+    print("   Consider using target_weight >= 0.1 for meaningful target representation")
+elif target_weight_multiplier < 0.1:
+    print(f"⚠️  WARNING: Very low target_weight={target_weight_multiplier:.2f} may provide minimal target representation")
+    print("   Consider target_weight >= 0.1 for meaningful customization")
+elif target_weight_multiplier > 10.0:
+    print(f"⚠️  WARNING: Very high target_weight={target_weight_multiplier:.1f} may overwhelm base knowledge")
+    print("   Consider target_weight <= 10.0 for balanced training")
 
 # Extract dataset name from dataset_dir for new experiment naming
 # e.g., "data/001_tonmoy_60s" -> "tonmoy_60s"
@@ -73,6 +97,55 @@ def create_combined_dataloader(datasets, batch_size, shuffle=True):
         return DataLoader(combined_dataset, batch_size=batch_size, shuffle=shuffle)
     else:
         raise ValueError("No datasets provided")
+
+def create_weighted_combined_dataloader(base_datasets, target_datasets, target_weight_multiplier, batch_size):
+    """Create a weighted dataloader combining base and target datasets.
+    
+    Args:
+        base_datasets: List of base participant datasets
+        target_datasets: List of target participant datasets  
+        target_weight_multiplier: Weight multiplier for target samples (1.0 = equal weighting, 0.0 = exclude target)
+        batch_size: Batch size for the dataloader
+    
+    Returns:
+        DataLoader with weighted sampling or regular sampling for edge cases
+    """
+    if not base_datasets and not target_datasets:
+        raise ValueError("No datasets provided")
+    
+    # Special case: target_weight = 0 means exclude target data entirely
+    if target_weight_multiplier == 0.0:
+        if not base_datasets:
+            raise ValueError("Cannot create dataloader with target_weight=0 and no base datasets")
+        print("⚠️  target_weight=0.0: Excluding target data entirely (Phase 1 only)")
+        combined_dataset = ConcatDataset(base_datasets)
+        return DataLoader(combined_dataset, batch_size=batch_size, shuffle=True)
+    
+    # Special case: no target datasets provided
+    if not target_datasets:
+        combined_dataset = ConcatDataset(base_datasets)
+        return DataLoader(combined_dataset, batch_size=batch_size, shuffle=True)
+    
+    # Normal case: weighted sampling with both base and target data
+    all_datasets = base_datasets + target_datasets
+    combined_dataset = ConcatDataset(all_datasets)
+    
+    # Calculate weights for each sample
+    weights = []
+    
+    # Add base weights (weight = 1.0)
+    for dataset in base_datasets:
+        weights.extend([1.0] * len(dataset))
+    
+    # Add target weights (weight = target_weight_multiplier)
+    for dataset in target_datasets:
+        weights.extend([target_weight_multiplier] * len(dataset))
+    
+    # Create weighted sampler
+    sampler = WeightedRandomSampler(weights, len(weights), replacement=True)
+    
+    # Create dataloader with weighted sampling
+    return DataLoader(combined_dataset, batch_size=batch_size, sampler=sampler)
 
 # Get all available participants from dataset directory
 available_participants = []
@@ -492,23 +565,55 @@ target_train_datasets, target_train_info = load_participant_data(args.dataset_di
 target_val_datasets, target_val_info = load_participant_data(args.dataset_dir, [args.target_participant], 'val')
 # target_test_datasets already loaded in Phase 1
 
-# Create combined training data (base + target)
-combined_train_datasets = base_train_datasets + target_train_datasets
-combined_trainloader = create_combined_dataloader(combined_train_datasets, config['training']['batch_size'], shuffle=True)
+# Create combined training data (base + target) with weighted sampling
+combined_trainloader = create_weighted_combined_dataloader(
+    base_train_datasets, 
+    target_train_datasets, 
+    target_weight_multiplier, 
+    config['training']['batch_size']
+)
 
 # Create validation dataloaders
 target_valloader = create_combined_dataloader(target_val_datasets, config['training']['batch_size'], shuffle=False)
 # Keep target_testloader from Phase 1 (already created)
 
-print(f"Combined training samples: {sum(base_train_info.values()) + sum(target_train_info.values()):,}")
-print(f"  - Base participants: {sum(base_train_info.values()):,}")
-print(f"  - Target participant: {sum(target_train_info.values()):,}")
+# Calculate effective target representation with weighting
+base_samples = sum(base_train_info.values())
+target_samples = sum(target_train_info.values())
+
+if target_weight_multiplier == 0.0:
+    # Special case: target data excluded entirely
+    effective_target_percentage = 0.0
+    total_weight = base_samples * 1.0  # Only base samples count
+else:
+    # Normal case: weighted representation
+    total_weight = base_samples * 1.0 + target_samples * target_weight_multiplier
+    effective_target_percentage = (target_samples * target_weight_multiplier / total_weight) * 100
+
+if target_weight_multiplier == 0.0:
+    print(f"Training samples (target excluded): {base_samples:,}")
+    print(f"  - Base participants: {base_samples:,} (weight: 1.0)")
+    print(f"  - Target participant: {target_samples:,} (weight: {target_weight_multiplier:.1f} → EXCLUDED)")
+    print(f"  - Effective target representation: {effective_target_percentage:.1f}% (no target data used)")
+else:
+    print(f"Combined training samples: {base_samples + target_samples:,}")
+    print(f"  - Base participants: {base_samples:,} (weight: 1.0)")
+    print(f"  - Target participant: {target_samples:,} (weight: {target_weight_multiplier:.1f})")
+    print(f"  - Effective target representation: {effective_target_percentage:.1f}%")
 print(f"Target validation samples: {sum(target_val_info.values()):,}")
 print(f"Target test samples: {sum(target_test_info.values()):,}")
 
 # Calculate positive ratio from combined training data for Phase 2 bias initialization
 combined_y_labels = []
-for dataset in combined_train_datasets:
+# Collect labels from base datasets
+for dataset in base_train_datasets:
+    for _, y in dataset:
+        if y.dim() == 0:  # scalar
+            combined_y_labels.append(y.unsqueeze(0))
+        else:
+            combined_y_labels.append(y)
+# Collect labels from target datasets
+for dataset in target_train_datasets:
     for _, y in dataset:
         if y.dim() == 0:  # scalar
             combined_y_labels.append(y.unsqueeze(0))
@@ -864,7 +969,9 @@ custom_metrics = {
     'combined_train_samples': sum(base_train_info.values()) + sum(target_train_info.values()),
     'target_val_samples': sum(target_val_info.values()),
     'target_test_samples': sum(target_test_info.values()),
-    'custom_learning_rate': custom_lr
+    'custom_learning_rate': custom_lr,
+    'target_weight_multiplier': target_weight_multiplier,
+    'effective_target_percentage': effective_target_percentage
 }
 torch.save(custom_metrics, f'{experiment_dir}/custom_metrics.pt')
 

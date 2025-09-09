@@ -1,20 +1,20 @@
 Metric,Value
-Participants,1.0
-Base F1 Mean,0.8986984337949738
-Base F1 Std,
-Base F1 Min,0.8986984337949738
+Participants,3.0
+Base F1 Mean,0.7855751880946107
+Base F1 Std,0.1797658117622732
+Base F1 Min,0.5782883333148995
 Base F1 Max,0.8986984337949738
-Custom F1 Mean,0.9369641802884211
-Custom F1 Std,
-Custom F1 Min,0.9369641802884211
+Custom F1 Mean,0.9174344806422425
+Custom F1 Std,0.017042743521389896
+Custom F1 Min,0.9055724349452738
 Custom F1 Max,0.9369641802884211
-Abs Improvement Mean,0.03826574649344727
-Abs Improvement Std,
-Abs Improvement Min,0.03826574649344727
-Abs Improvement Max,0.03826574649344727
-Pct Improvement Mean,4.257907330700556
-Pct Improvement Std,
-Pct Improvement Min,4.257907330700556
-Pct Improvement Max,4.257907330700556
-Participants Improved,1.0
+Abs Improvement Mean,0.13185929254763187
+Abs Improvement Std,0.17298701782785822
+Abs Improvement Min,0.0258336377713152
+Abs Improvement Max,0.3314784933781332
+Pct Improvement Mean,21.505015238786935
+Pct Improvement Std,31.02426482272245
+Pct Improvement Min,2.936512275496119
+Pct Improvement Max,57.32062611016412
+Participants Improved,3.0
 Improvement Rate (%),100.0

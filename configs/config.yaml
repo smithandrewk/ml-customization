@@ -27,6 +27,7 @@ training:
   base_patience: 5      # Early stopping patience for base training phase
   custom_patience: 5    # Early stopping patience for customization phase
   custom_learning_rate: 0.0003  # Lower LR for fine-tuning (10x lower than base)
+  target_weight_multiplier: 5.0  # Weight multiplier for target samples in Phase 2 (1.0 = equal weighting)
   
 # Participants Configuration
 participants:

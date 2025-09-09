@@ -56,7 +56,9 @@ def collect_experiment_results(experiments_dir='experiments'):
                         'target_val_samples': metrics.get('target_val_samples', None),
                         'target_test_samples': metrics.get('target_test_samples', None),
                         'base_total_epochs': metrics.get('base_total_epochs', None),
-                        'custom_total_epochs': metrics.get('custom_total_epochs', None)
+                        'custom_total_epochs': metrics.get('custom_total_epochs', None),
+                        'target_weight_multiplier': metrics.get('target_weight_multiplier', 1.0),
+                        'effective_target_percentage': metrics.get('effective_target_percentage', None)
                     }
                     
                     results.append(result)
@@ -90,6 +92,18 @@ def generate_summary_statistics(df):
     print(f"Early stopping metric: {df['early_stopping_metric'].iloc[0] if len(df['early_stopping_metric'].unique()) == 1 else 'Mixed'}")
     if df['ma_window_size'].notna().any():
         print(f"Moving average window: {df['ma_window_size'].iloc[0]}")
+    
+    # Target weighting summary
+    if df['target_weight_multiplier'].notna().any():
+        unique_weights = df['target_weight_multiplier'].unique()
+        if len(unique_weights) == 1:
+            print(f"Target weight multiplier: {unique_weights[0]:.1f}")
+            if df['effective_target_percentage'].notna().any():
+                print(f"Effective target representation: {df['effective_target_percentage'].mean():.1f}% ± {df['effective_target_percentage'].std():.1f}%")
+        else:
+            print(f"Target weight multiplier: Mixed ({unique_weights})")
+            if df['effective_target_percentage'].notna().any():
+                print(f"Effective target representation: {df['effective_target_percentage'].mean():.1f}% ± {df['effective_target_percentage'].std():.1f}%")
     
     # Training epochs summary
     if df['base_total_epochs'].notna().any():
@@ -254,6 +268,7 @@ def create_best_models_table(df, save_dir='results_analysis'):
             'Phase 2 Epoch': int(row['custom_best_epoch']) if pd.notna(row['custom_best_epoch']) else 'N/A',
             'Phase 2 Metric': f"{row['custom_val_metric']:.4f}" if pd.notna(row['custom_val_metric']) else 'N/A', 
             'Phase 2 Test F1': f"{row['custom_test_f1']:.4f}",
+            'Target Weight': f"{row['target_weight_multiplier']:.1f}" if pd.notna(row['target_weight_multiplier']) else '1.0',
             'Improvement': f"{row['absolute_improvement']:+.4f} ({row['percentage_improvement']:+.2f}%)"
         })
     
