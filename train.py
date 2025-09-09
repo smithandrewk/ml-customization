@@ -25,6 +25,7 @@ parser.add_argument('--dataset_dir', type=str, required=True, help='Directory co
 parser.add_argument('--target_participant', type=str, required=True, help='Participant to customize for (hold out for phase 2)')
 parser.add_argument('--experiment_suffix', type=str, help='Suffix for experiment name (default: custom_{target_participant})')
 parser.add_argument('--model', type=str, default='full', choices=['full', 'simple'], help='Model architecture: full (RegNet-style) or simple (3-layer for testing)')
+parser.add_argument('--early_stopping_metric', type=str, default='f1', choices=['f1', 'loss'], help='Metric for early stopping: f1 (maximize F1) or loss (minimize loss)')
 args = parser.parse_args()
 
 # Load configuration
@@ -109,6 +110,10 @@ base_val_datasets, base_val_info = load_participant_data(args.dataset_dir, base_
 target_test_datasets, target_test_info = load_participant_data(args.dataset_dir, [args.target_participant], 'test')
 target_val_datasets, target_val_info = load_participant_data(args.dataset_dir, [args.target_participant], 'val')
 
+# Load target training data for continuous evaluation (not used for actual training in Phase 1)
+target_train_datasets_eval, target_train_info_eval = load_participant_data(args.dataset_dir, [args.target_participant], 'train')
+target_trainloader_eval = create_combined_dataloader(target_train_datasets_eval, config['training']['batch_size'], shuffle=False)
+
 # Create dataloaders with clear names
 base_trainloader = create_combined_dataloader(base_train_datasets, config['training']['batch_size'], shuffle=True)
 base_valloader = create_combined_dataloader(base_val_datasets, config['training']['batch_size'], shuffle=False)
@@ -170,12 +175,73 @@ target_testf1i_phase1 = []
 target_vallossi_phase1 = []
 target_valf1i_phase1 = []
 
+# Continuous training evaluation metrics (evaluate both throughout both phases)
+base_train_continuous_lossi = []  # Base training loss evaluated continuously
+base_train_continuous_f1i = []   # Base training F1 evaluated continuously  
+target_train_continuous_lossi = [] # Target training loss evaluated continuously
+target_train_continuous_f1i = []  # Target training F1 evaluated continuously
+
 # Phase 1 early stopping variables
 base_n_epochs_without_improvement = 0
-base_max_val_f1 = 0.0
+if args.early_stopping_metric == 'f1':
+    base_best_metric = 0.0  # Start with 0 for F1 (maximize)
+    base_metric_name = 'Base Val F1'
+else:  # loss
+    base_best_metric = float('inf')  # Start with infinity for loss (minimize)  
+    base_metric_name = 'Base Val Loss'
+base_best_epoch = -1
 base_patience = config['training'].get('base_patience', config['training'].get('patience', 10))
 
 print(f"Starting Phase 1 training with patience={base_patience}")
+
+# Initial evaluation before training starts (epoch -1, will be plotted as epoch 0)
+print("Performing initial evaluation before training...")
+model.eval()
+
+# Evaluate initial performance on both base and target training data
+with torch.no_grad():
+    # Base training evaluation
+    base_train_preds_init = []
+    base_train_labels_init = []
+    base_train_losses_init = []
+    
+    for Xi, yi in base_trainloader:
+        Xi, yi = Xi.to(device), yi.to(device).float()
+        outputs = model(Xi).squeeze()
+        loss = criterion(outputs, yi)
+        
+        base_train_preds_init.append((outputs.sigmoid() > 0.5).float())
+        base_train_labels_init.append(yi)
+        base_train_losses_init.append(loss.item())
+    
+    base_train_preds_init = torch.cat(base_train_preds_init).cpu()
+    base_train_labels_init = torch.cat(base_train_labels_init).cpu()
+    base_train_loss_init = np.mean(base_train_losses_init)
+    base_train_continuous_lossi.append(base_train_loss_init)
+    base_train_continuous_f1i.append(f1_score(base_train_labels_init, base_train_preds_init, average='macro', zero_division=0))
+    
+    # Target training evaluation
+    target_train_preds_init = []
+    target_train_labels_init = []
+    target_train_losses_init = []
+    
+    for Xi, yi in target_trainloader_eval:
+        Xi, yi = Xi.to(device), yi.to(device).float()
+        outputs = model(Xi).squeeze()
+        loss = criterion(outputs, yi)
+        
+        target_train_preds_init.append((outputs.sigmoid() > 0.5).float())
+        target_train_labels_init.append(yi)
+        target_train_losses_init.append(loss.item())
+    
+    target_train_preds_init = torch.cat(target_train_preds_init).cpu()
+    target_train_labels_init = torch.cat(target_train_labels_init).cpu()
+    target_train_loss_init = np.mean(target_train_losses_init)
+    target_train_continuous_lossi.append(target_train_loss_init)
+    target_train_continuous_f1i.append(f1_score(target_train_labels_init, target_train_preds_init, average='macro', zero_division=0))
+
+print(f"Initial base training loss: {base_train_loss_init:.4f}, F1: {base_train_continuous_f1i[-1]:.4f}")
+print(f"Initial target training loss: {target_train_loss_init:.4f}, F1: {target_train_continuous_f1i[-1]:.4f}")
 
 for epoch in range(config['training']['num_epochs']):
     epoch_start_time = time()
@@ -269,6 +335,53 @@ for epoch in range(config['training']['num_epochs']):
     target_vallossi_phase1.append(target_val_loss)
     target_valf1i_phase1.append(f1_score(target_val_labels, target_val_preds, average='macro', zero_division=0))
 
+    # Continuous training evaluation: Evaluate current model on both base and target training data
+    model.eval()
+    
+    # Evaluate on base training data (continuous)
+    base_train_preds = []
+    base_train_labels = []
+    base_train_losses = []
+    
+    with torch.no_grad():
+        for Xi, yi in base_trainloader:
+            Xi, yi = Xi.to(device), yi.to(device).float()
+            outputs = model(Xi).squeeze()
+            loss = criterion(outputs, yi)
+            
+            base_train_preds.append((outputs.sigmoid() > 0.5).float())
+            base_train_labels.append(yi)
+            base_train_losses.append(loss.item())
+    
+    base_train_preds = torch.cat(base_train_preds).cpu()
+    base_train_labels = torch.cat(base_train_labels).cpu()
+    base_train_loss = np.mean(base_train_losses)
+    base_train_continuous_lossi.append(base_train_loss)
+    base_train_continuous_f1i.append(f1_score(base_train_labels, base_train_preds, average='macro', zero_division=0))
+    
+    # Evaluate on target training data (continuous) - will be poor in Phase 1 since no target data used for training
+    target_train_preds = []
+    target_train_labels = []
+    target_train_losses = []
+    
+    # Use the target trainloader created at the beginning
+    
+    with torch.no_grad():
+        for Xi, yi in target_trainloader_eval:
+            Xi, yi = Xi.to(device), yi.to(device).float()
+            outputs = model(Xi).squeeze()
+            loss = criterion(outputs, yi)
+            
+            target_train_preds.append((outputs.sigmoid() > 0.5).float())
+            target_train_labels.append(yi)
+            target_train_losses.append(loss.item())
+    
+    target_train_preds = torch.cat(target_train_preds).cpu()
+    target_train_labels = torch.cat(target_train_labels).cpu()
+    target_train_loss = np.mean(target_train_losses)
+    target_train_continuous_lossi.append(target_train_loss)
+    target_train_continuous_f1i.append(f1_score(target_train_labels, target_train_preds, average='macro', zero_division=0))
+
     # Plot training progress every epoch for Phase 1 with 4-line format
     if epoch % 1 == 0:
         # Create current arrays for Phase 1 plotting (no Phase 2 data yet)
@@ -279,40 +392,59 @@ for epoch in range(config['training']['num_epochs']):
         
         # Define descriptive labels for Phase 1
         phase1_labels = {
-            'train': 'Training Loss: Phase 1 (Base Training)',
+            'train': 'Training Loss: Phase 1 (Base Training)',  # Legacy
             'target': 'Target Test Loss (Continuous Evaluation)',
             'base_val': 'Base Validation Loss (Continuous Evaluation)', 
             'target_val': 'Target Validation Loss (Continuous Evaluation)',
-            'train_f1': 'Training F1: Phase 1 (Base Training)',
+            'train_f1': 'Training F1: Phase 1 (Base Training)',  # Legacy
             'target_f1': 'Target Test F1 (Continuous Evaluation)',
             'base_val_f1': 'Base Validation F1 (Continuous Evaluation)',
-            'target_val_f1': 'Target Validation F1 (Continuous Evaluation)'
+            'target_val_f1': 'Target Validation F1 (Continuous Evaluation)',
+            # New separate training labels
+            'base_train': 'Base Training Loss (Phase 1)',
+            'target_train': 'Target Training Loss (Phase 2)',  # Not shown in Phase 1
+            'base_train_f1': 'Base Training F1 (Phase 1)',
+            'target_train_f1': 'Target Training F1 (Phase 2)'  # Not shown in Phase 1
         }
         
         plot_training_progress(
-            trainlossi=base_trainlossi,
+            trainlossi=base_trainlossi,  # Legacy - keep for backward compatibility
             testlossi=None,  # Legacy parameter - not used
             targetlossi=target_testlossi_phase1,  # Target test loss during base training
             basevalidationlossi=current_basevalidationlossi,  # Base validation loss
             targetvalidationlossi=current_targetvalidationlossi,  # Target validation loss
-            trainf1i=base_trainf1i,
+            trainf1i=base_trainf1i,  # Legacy - keep for backward compatibility
             testf1i=None,  # Legacy parameter - not used
             targetf1i=target_testf1i_phase1,  # Target test F1 during base training
             basevalidationf1i=current_basevalidationf1i,  # Base validation F1
             targetvalidationf1i=current_targetvalidationf1i,  # Target validation F1
+            # New separate training parameters for Phase 1 (continuous evaluation)
+            base_trainlossi=base_train_continuous_lossi,  # Base training loss (continuous evaluation)
+            target_trainlossi=target_train_continuous_lossi,  # Target training loss (continuous evaluation)
+            base_trainf1i=base_train_continuous_f1i,  # Base training F1 (continuous evaluation)
+            target_trainf1i=target_train_continuous_f1i,  # Target training F1 (continuous evaluation)
             ma_window_size=config['visualization']['ma_window_size'],
             save_path=f'{experiment_dir}/training_progress.{config["visualization"]["plot_format"]}',
+            transition_epoch=None,  # No transition in Phase 1
             custom_labels=phase1_labels
         )
 
-    # Phase 1 early stopping (based on base validation F1)
-    if base_valf1i[-1] > base_max_val_f1:
-        base_max_val_f1 = base_valf1i[-1]
+    # Phase 1 early stopping (based on chosen metric)
+    if args.early_stopping_metric == 'f1':
+        current_metric = base_valf1i[-1]
+        improved = current_metric > base_best_metric
+    else:  # loss
+        current_metric = base_vallossi[-1]
+        improved = current_metric < base_best_metric
+    
+    if improved:
+        base_best_metric = current_metric
+        base_best_epoch = epoch
         torch.save(model.state_dict(), f'{experiment_dir}/base_model.pt')
-        print(f"Phase 1 Epoch {epoch}: New best base model saved with val F1 score {base_max_val_f1:.4f}")
+        print(f"Phase 1 Epoch {epoch}: New best base model saved with {base_metric_name}: {base_best_metric:.4f}")
         base_n_epochs_without_improvement = 0
     else:
-        print(f"Phase 1 Epoch {epoch}: No improvement ({base_valf1i[-1]:.4f} vs {base_max_val_f1:.4f})")
+        print(f"Phase 1 Epoch {epoch}: No improvement ({current_metric:.4f} vs {base_best_metric:.4f})")
         base_n_epochs_without_improvement += 1
 
     if base_n_epochs_without_improvement >= base_patience:
@@ -327,7 +459,7 @@ for epoch in range(config['training']['num_epochs']):
           f"Train F1: {base_trainf1i[-1]:.4f}, Base Val F1: {base_valf1i[-1]:.4f}, Target Test F1: {target_testf1i_phase1[-1]:.4f}. "
           f"Epochs without improvement: {base_n_epochs_without_improvement}")
 
-print(f"\nPhase 1 completed! Best base validation F1 score: {base_max_val_f1:.4f}")
+print(f"\nPhase 1 completed! Best {base_metric_name}: {base_best_metric:.4f}")
 
 # Save Phase 1 metrics
 base_metrics = {
@@ -337,7 +469,7 @@ base_metrics = {
     'train_f1': base_trainf1i,
     'val_f1': base_valf1i,
     'target_test_f1': target_testf1i_phase1,
-    'best_val_f1': base_max_val_f1,
+    'best_val_metric': base_best_metric,
     'base_participants': base_participants,
     'base_train_samples': sum(base_train_info.values()),
     'base_val_samples': sum(base_val_info.values())
@@ -410,7 +542,13 @@ base_valf1i_phase2 = []
 
 # Phase 2 early stopping variables
 custom_n_epochs_without_improvement = 0
-custom_max_val_f1 = 0.0
+if args.early_stopping_metric == 'f1':
+    custom_best_metric = 0.0  # Start with 0 for F1 (maximize)
+    custom_metric_name = 'Target Val F1'
+else:  # loss
+    custom_best_metric = float('inf')  # Start with infinity for loss (minimize)
+    custom_metric_name = 'Target Val Loss'
+custom_best_epoch = -1
 custom_patience = config['training'].get('custom_patience', config['training'].get('patience', 10) // 2)
 
 print(f"Starting Phase 2 customization with LR={custom_lr}, patience={custom_patience}")
@@ -509,6 +647,51 @@ for epoch in range(config['training']['num_epochs']):
     base_vallossi_phase2.append(base_val_loss)
     base_valf1i_phase2.append(f1_score(base_val_labels, base_val_preds, average='macro', zero_division=0))
 
+    # Continuous training evaluation in Phase 2: Evaluate current model on both base and target training data
+    model.eval()
+    
+    # Evaluate on base training data (continuous) - should be similar to Phase 1 end since base data unchanged
+    base_train_preds_p2 = []
+    base_train_labels_p2 = []
+    base_train_losses_p2 = []
+    
+    with torch.no_grad():
+        for Xi, yi in base_trainloader:
+            Xi, yi = Xi.to(device), yi.to(device).float()
+            outputs = model(Xi).squeeze()
+            loss = criterion(outputs, yi)
+            
+            base_train_preds_p2.append((outputs.sigmoid() > 0.5).float())
+            base_train_labels_p2.append(yi)
+            base_train_losses_p2.append(loss.item())
+    
+    base_train_preds_p2 = torch.cat(base_train_preds_p2).cpu()
+    base_train_labels_p2 = torch.cat(base_train_labels_p2).cpu()
+    base_train_loss_p2 = np.mean(base_train_losses_p2)
+    base_train_continuous_lossi.append(base_train_loss_p2)
+    base_train_continuous_f1i.append(f1_score(base_train_labels_p2, base_train_preds_p2, average='macro', zero_division=0))
+    
+    # Evaluate on target training data (continuous) - should improve in Phase 2 since target data now used for training
+    target_train_preds_p2 = []
+    target_train_labels_p2 = []
+    target_train_losses_p2 = []
+    
+    with torch.no_grad():
+        for Xi, yi in target_trainloader_eval:
+            Xi, yi = Xi.to(device), yi.to(device).float()
+            outputs = model(Xi).squeeze()
+            loss = criterion(outputs, yi)
+            
+            target_train_preds_p2.append((outputs.sigmoid() > 0.5).float())
+            target_train_labels_p2.append(yi)
+            target_train_losses_p2.append(loss.item())
+    
+    target_train_preds_p2 = torch.cat(target_train_preds_p2).cpu()
+    target_train_labels_p2 = torch.cat(target_train_labels_p2).cpu()
+    target_train_loss_p2 = np.mean(target_train_losses_p2)
+    target_train_continuous_lossi.append(target_train_loss_p2)
+    target_train_continuous_f1i.append(f1_score(target_train_labels_p2, target_train_preds_p2, average='macro', zero_division=0))
+
     # Plot training progress every epoch for Phase 2 with 4-line format
     if epoch % 1 == 0:
         # Create combined arrays for Phase 2 plotting (includes both phases)
@@ -524,41 +707,59 @@ for epoch in range(config['training']['num_epochs']):
         
         # Define descriptive labels for Phase 2
         phase2_labels = {
-            'train': 'Training Loss: Phase 1 (Base) → Phase 2 (Target)',
+            'train': 'Training Loss: Phase 1 (Base) → Phase 2 (Target)',  # Legacy
             'target': 'Target Test Loss (Continuous Evaluation)',
             'base_val': 'Base Validation Loss (Continuous Evaluation)', 
             'target_val': 'Target Validation Loss (Continuous Evaluation)',
-            'train_f1': 'Training F1: Phase 1 (Base) → Phase 2 (Target)',
+            'train_f1': 'Training F1: Phase 1 (Base) → Phase 2 (Target)',  # Legacy
             'target_f1': 'Target Test F1 (Continuous Evaluation)',
             'base_val_f1': 'Base Validation F1 (Continuous Evaluation)',
-            'target_val_f1': 'Target Validation F1 (Continuous Evaluation)'
+            'target_val_f1': 'Target Validation F1 (Continuous Evaluation)',
+            # New separate training labels
+            'base_train': 'Base Training Loss (Phase 1)',
+            'target_train': 'Target Training Loss (Phase 2)',
+            'base_train_f1': 'Base Training F1 (Phase 1)',
+            'target_train_f1': 'Target Training F1 (Phase 2)'
         }
         
         plot_training_progress(
-            trainlossi=combined_trainlossi_current,
+            trainlossi=combined_trainlossi_current,  # Legacy - keep for backward compatibility
             testlossi=None,  # Legacy parameter - not used
             targetlossi=combined_targetlossi_current,  # Continuous target test
             basevalidationlossi=combined_basevalidationlossi_current,  # Continuous base validation
             targetvalidationlossi=combined_targetvalidationlossi_current,  # Continuous target validation
-            trainf1i=combined_trainf1i_current,
+            trainf1i=combined_trainf1i_current,  # Legacy - keep for backward compatibility
             testf1i=None,  # Legacy parameter - not used
             targetf1i=combined_targetf1i_current,  # Continuous target test F1
             basevalidationf1i=combined_basevalidationf1i_current,  # Continuous base validation F1
             targetvalidationf1i=combined_targetvalidationf1i_current,  # Continuous target validation F1
+            # New separate training parameters for Phase 2 (continuous evaluation)
+            base_trainlossi=base_train_continuous_lossi,  # Base training loss (continuous evaluation)
+            target_trainlossi=target_train_continuous_lossi,  # Target training loss (continuous evaluation)
+            base_trainf1i=base_train_continuous_f1i,  # Base training F1 (continuous evaluation)
+            target_trainf1i=target_train_continuous_f1i,  # Target training F1 (continuous evaluation)
             ma_window_size=config['visualization']['ma_window_size'],
             save_path=f'{experiment_dir}/training_progress.{config["visualization"]["plot_format"]}',
             transition_epoch=current_transition_epoch,
             custom_labels=phase2_labels
         )
 
-    # Phase 2 early stopping (based on target validation performance)
-    if custom_target_valf1i[-1] > custom_max_val_f1:
-        custom_max_val_f1 = custom_target_valf1i[-1]
+    # Phase 2 early stopping (based on chosen metric)
+    if args.early_stopping_metric == 'f1':
+        current_metric = custom_target_valf1i[-1]
+        improved = current_metric > custom_best_metric
+    else:  # loss
+        current_metric = custom_target_vallossi[-1]
+        improved = current_metric < custom_best_metric
+    
+    if improved:
+        custom_best_metric = current_metric
+        custom_best_epoch = len(base_trainf1i) + epoch  # Adjust for combined epoch numbering
         torch.save(model.state_dict(), f'{experiment_dir}/customized_model.pt')
-        print(f"Phase 2 Epoch {epoch}: New best customized model saved with target val F1 score {custom_max_val_f1:.4f}")
+        print(f"Phase 2 Epoch {epoch}: New best customized model saved with {custom_metric_name}: {custom_best_metric:.4f}")
         custom_n_epochs_without_improvement = 0
     else:
-        print(f"Phase 2 Epoch {epoch}: No improvement ({custom_target_valf1i[-1]:.4f} vs {custom_max_val_f1:.4f})")
+        print(f"Phase 2 Epoch {epoch}: No improvement ({current_metric:.4f} vs {custom_best_metric:.4f})")
         custom_n_epochs_without_improvement += 1
 
     if custom_n_epochs_without_improvement >= custom_patience:
@@ -573,72 +774,70 @@ for epoch in range(config['training']['num_epochs']):
           f"Train F1: {custom_trainf1i[-1]:.4f}, Target Val F1: {custom_target_valf1i[-1]:.4f}, Target Test F1: {custom_target_testf1i[-1]:.4f}. "
           f"Epochs without improvement: {custom_n_epochs_without_improvement}")
 
-print(f"\nPhase 2 completed! Best target validation F1 score: {custom_max_val_f1:.4f}")
+print(f"\nPhase 2 completed! Best {custom_metric_name}: {custom_best_metric:.4f}")
 
 # =============================================================================
-# FINAL MODEL EVALUATION
+# FINAL MODEL EVALUATION (Using Moving Averages)
 # =============================================================================
 print("\n" + "="*60)
-print("FINAL MODEL EVALUATION")
+print("FINAL MODEL EVALUATION (Using Moving Averages)")
 print("="*60)
 
-# Evaluate Phase 1 best model on target test set
-print("Evaluating Phase 1 best model (base training) on target test set...")
-model.load_state_dict(torch.load(f'{experiment_dir}/base_model.pt'))
-model.eval()
+from utils import moving_average
 
-base_model_test_preds = []
-base_model_test_labels = []
-base_model_test_losses = []
+# Get moving average window size from config
+ma_window_size = config['visualization']['ma_window_size']
 
-with torch.no_grad():
-    for Xi, yi in target_testloader:
-        Xi, yi = Xi.to(device), yi.to(device).float()
-        outputs = model(Xi).squeeze()
-        loss = criterion(outputs, yi)
-        
-        base_model_test_preds.append((outputs.sigmoid() > 0.5).float())
-        base_model_test_labels.append(yi)
-        base_model_test_losses.append(loss.item())
+# Calculate moving averages for target test F1 throughout both phases
+combined_target_testf1i = target_testf1i_phase1 + custom_target_testf1i
 
-base_model_test_preds = torch.cat(base_model_test_preds).cpu()
-base_model_test_labels = torch.cat(base_model_test_labels).cpu()
-base_model_test_f1 = f1_score(base_model_test_labels, base_model_test_preds, average='macro', zero_division=0)
-
-print(f"Phase 1 best model test F1: {base_model_test_f1:.4f}")
-
-# Evaluate Phase 2 best model on target test set
-print("Evaluating Phase 2 best model (customized) on target test set...")
-model.load_state_dict(torch.load(f'{experiment_dir}/customized_model.pt'))
-model.eval()
-
-custom_model_test_preds = []
-custom_model_test_labels = []
-custom_model_test_losses = []
-
-with torch.no_grad():
-    for Xi, yi in target_testloader:
-        Xi, yi = Xi.to(device), yi.to(device).float()
-        outputs = model(Xi).squeeze()
-        loss = criterion(outputs, yi)
-        
-        custom_model_test_preds.append((outputs.sigmoid() > 0.5).float())
-        custom_model_test_labels.append(yi)
-        custom_model_test_losses.append(loss.item())
-
-custom_model_test_preds = torch.cat(custom_model_test_preds).cpu()
-custom_model_test_labels = torch.cat(custom_model_test_labels).cpu()
-custom_model_test_f1 = f1_score(custom_model_test_labels, custom_model_test_preds, average='macro', zero_division=0)
-
-print(f"Phase 2 best model test F1: {custom_model_test_f1:.4f}")
-
-# Calculate improvements
-absolute_improvement = custom_model_test_f1 - base_model_test_f1
-percentage_improvement = (absolute_improvement / base_model_test_f1 * 100) if base_model_test_f1 > 0 else 0.0
-
-print(f"\nPerformance Improvement:")
-print(f"  • Absolute improvement: {absolute_improvement:+.4f}")
-print(f"  • Percentage improvement: {percentage_improvement:+.2f}%")
+# Extract moving average F1 at the best model epochs
+if len(combined_target_testf1i) > ma_window_size:
+    target_testf1i_ma = moving_average(combined_target_testf1i, ma_window_size)
+    
+    # Map epoch indices to moving average indices
+    # Moving average starts at index (ma_window_size - 1)
+    def epoch_to_ma_index(epoch):
+        return max(0, min(epoch - (ma_window_size - 1), len(target_testf1i_ma) - 1))
+    
+    # Get moving average F1 at best model epochs
+    base_model_ma_index = epoch_to_ma_index(base_best_epoch)
+    custom_model_ma_index = epoch_to_ma_index(custom_best_epoch)
+    
+    base_model_test_f1_ma = target_testf1i_ma[base_model_ma_index]
+    custom_model_test_f1_ma = target_testf1i_ma[custom_model_ma_index]
+    
+    print(f"Phase 1 best model target test F1 (MA): {base_model_test_f1_ma:.4f} (epoch {base_best_epoch})")
+    print(f"Phase 2 best model target test F1 (MA): {custom_model_test_f1_ma:.4f} (epoch {custom_best_epoch})")
+    
+    # Calculate improvements using moving averages
+    absolute_improvement_ma = custom_model_test_f1_ma - base_model_test_f1_ma
+    percentage_improvement_ma = (absolute_improvement_ma / base_model_test_f1_ma * 100) if base_model_test_f1_ma > 0 else 0.0
+    
+    print(f"\nPerformance Improvement (Moving Average):")
+    print(f"  • Absolute improvement: {absolute_improvement_ma:+.4f}")
+    print(f"  • Percentage improvement: {percentage_improvement_ma:+.2f}%")
+    
+    # For backward compatibility, also store the moving average values
+    base_model_test_f1 = base_model_test_f1_ma
+    custom_model_test_f1 = custom_model_test_f1_ma  
+    absolute_improvement = absolute_improvement_ma
+    percentage_improvement = percentage_improvement_ma
+    
+else:
+    # Fallback to raw values if not enough data for moving average
+    print("Warning: Not enough epochs for moving average, using raw values")
+    base_model_test_f1 = target_testf1i_phase1[base_best_epoch] if base_best_epoch < len(target_testf1i_phase1) else 0.0
+    custom_epoch_in_phase2 = custom_best_epoch - len(target_testf1i_phase1)
+    custom_model_test_f1 = custom_target_testf1i[custom_epoch_in_phase2] if custom_epoch_in_phase2 < len(custom_target_testf1i) else 0.0
+    
+    absolute_improvement = custom_model_test_f1 - base_model_test_f1
+    percentage_improvement = (absolute_improvement / base_model_test_f1 * 100) if base_model_test_f1 > 0 else 0.0
+    
+    print(f"Phase 1 best model target test F1 (raw): {base_model_test_f1:.4f}")
+    print(f"Phase 2 best model target test F1 (raw): {custom_model_test_f1:.4f}")
+    print(f"Absolute improvement: {absolute_improvement:+.4f}")
+    print(f"Percentage improvement: {percentage_improvement:+.2f}%")
 
 # Save Phase 2 metrics
 custom_metrics = {
@@ -648,11 +847,19 @@ custom_metrics = {
     'train_f1': custom_trainf1i,
     'target_val_f1': custom_target_valf1i,
     'target_test_f1': custom_target_testf1i,
-    'best_target_val_f1': custom_max_val_f1,
-    'base_model_test_f1': base_model_test_f1,
-    'custom_model_test_f1': custom_model_test_f1,
-    'absolute_improvement': absolute_improvement,
-    'percentage_improvement': percentage_improvement,
+    'base_best_metric': base_best_metric,  # Best metric value from Phase 1
+    'custom_best_metric': custom_best_metric,  # Best metric value from Phase 2  
+    'base_model_test_f1': base_model_test_f1,  # Moving average F1 at best Phase 1 epoch
+    'custom_model_test_f1': custom_model_test_f1,  # Moving average F1 at best Phase 2 epoch
+    'absolute_improvement': absolute_improvement,  # Based on moving averages
+    'percentage_improvement': percentage_improvement,  # Based on moving averages
+    'base_best_epoch': base_best_epoch,
+    'custom_best_epoch': custom_best_epoch,
+    'ma_window_size': ma_window_size,
+    'evaluation_method': 'moving_average',  # Flag to indicate method used
+    'early_stopping_metric': args.early_stopping_metric,  # 'f1' or 'loss'
+    'base_metric_name': base_metric_name,
+    'custom_metric_name': custom_metric_name,
     'target_participant': args.target_participant,
     'combined_train_samples': sum(base_train_info.values()) + sum(target_train_info.values()),
     'target_val_samples': sum(target_val_info.values()),
@@ -671,12 +878,12 @@ print("="*60)
 print(f"Target participant: {args.target_participant}")
 print(f"Base participants: {base_participants}")
 print(f"\nPhase 1 (Base Training):")
-print(f"  • Best validation F1 on base participants: {base_max_val_f1:.4f}")
+print(f"  • Best {base_metric_name}: {base_best_metric:.4f}")
 print(f"  • Test F1 on target participant: {base_model_test_f1:.4f}")
 print(f"  • Training samples: {sum(base_train_info.values()):,}")
 
 print(f"\nPhase 2 (Customization):")
-print(f"  • Best validation F1 on target participant: {custom_max_val_f1:.4f}")
+print(f"  • Best {custom_metric_name}: {custom_best_metric:.4f}")
 print(f"  • Test F1 on target participant: {custom_model_test_f1:.4f}")
 print(f"  • Training samples: {sum(base_train_info.values()) + sum(target_train_info.values()):,}")
 
@@ -708,33 +915,58 @@ combined_targetvalidationf1i = target_valf1i_phase1 + custom_target_valf1i  # Ac
 # Calculate transition point (where phase 1 ends and phase 2 begins)
 transition_epoch = len(base_trainf1i) - 1
 
-# Define descriptive labels for final combined view with 4 separate curves
+# Define descriptive labels for final combined view with separate base/target training curves
 final_labels = {
-    'train': 'Training Loss: Phase 1 (Base) → Phase 2 (Target)',
+    'train': 'Combined Training (Legacy)',  # Legacy parameter
     'target': 'Target Test Loss (Continuous Evaluation)',
     'base_val': 'Base Validation Loss (Continuous Evaluation)',
     'target_val': 'Target Validation Loss (Continuous Evaluation)',
-    'train_f1': 'Training F1: Phase 1 (Base) → Phase 2 (Target)',
+    'train_f1': 'Combined Training F1 (Legacy)',  # Legacy parameter
     'target_f1': 'Target Test F1 (Continuous Evaluation)',
     'base_val_f1': 'Base Validation F1 (Continuous Evaluation)', 
-    'target_val_f1': 'Target Validation F1 (Continuous Evaluation)'
+    'target_val_f1': 'Target Validation F1 (Continuous Evaluation)',
+    # New separate training labels
+    'base_train': 'Base Training Loss (Phase 1)',
+    'target_train': 'Target Training Loss (Phase 2)',
+    'base_train_f1': 'Base Training F1 (Phase 1)',
+    'target_train_f1': 'Target Training F1 (Phase 2)'
+}
+
+# Create best model annotations
+best_models = {
+    'phase1': {
+        'epoch': base_best_epoch,
+        'metric_value': base_best_metric,
+        'metric_name': base_metric_name
+    },
+    'phase2': {
+        'epoch': custom_best_epoch,
+        'metric_value': custom_best_metric,
+        'metric_name': custom_metric_name
+    }
 }
 
 plot_training_progress(
-    trainlossi=combined_trainlossi,
+    trainlossi=combined_trainlossi,  # Legacy - keep for backward compatibility
     testlossi=None,  # Legacy parameter - not used since we have separate base/target validation
     targetlossi=combined_targetlossi,  # Continuous target test performance throughout both phases
     basevalidationlossi=combined_basevalidationlossi,  # Base validation: active Phase 1, plateau Phase 2
     targetvalidationlossi=combined_targetvalidationlossi,  # Target validation: pre-Phase 1, active Phase 2
-    trainf1i=combined_trainf1i,
+    trainf1i=combined_trainf1i,  # Legacy - keep for backward compatibility
     testf1i=None,  # Legacy parameter - not used since we have separate base/target validation
     targetf1i=combined_targetf1i,  # Continuous target test performance throughout both phases
     basevalidationf1i=combined_basevalidationf1i,  # Base validation F1: active Phase 1, plateau Phase 2
     targetvalidationf1i=combined_targetvalidationf1i,  # Target validation F1: pre-Phase 1, active Phase 2
+    # New separate training parameters (continuous evaluation)
+    base_trainlossi=base_train_continuous_lossi,  # Base training loss (continuous evaluation)
+    target_trainlossi=target_train_continuous_lossi,  # Target training loss (continuous evaluation)
+    base_trainf1i=base_train_continuous_f1i,  # Base training F1 (continuous evaluation)
+    target_trainf1i=target_train_continuous_f1i,  # Target training F1 (continuous evaluation)
     ma_window_size=config['visualization']['ma_window_size'],
     save_path=f'{experiment_dir}/final_combined_training_plot.{config["visualization"]["plot_format"]}',
     transition_epoch=transition_epoch,
-    custom_labels=final_labels
+    custom_labels=final_labels,
+    best_models=best_models
 )
 
 print(f"\nVisualization saved: {experiment_dir}/combined_training_plot.{config['visualization']['plot_format']}")
@@ -754,13 +986,13 @@ Dataset Information:
   • Target test samples: {sum(target_test_info.values()):,}
 
 Phase 1 Results (Base Training):
-  • Best Validation F1 Score: {base_max_val_f1:.4f}
+  • Best Validation Metric: {base_best_metric:.4f}
   • Test F1 on Target Participant: {base_model_test_f1:.4f}
   • Epochs trained: {len(base_trainf1i)}
   • Early stopping patience: {base_patience}
 
 Phase 2 Results (Customization):
-  • Best Validation F1 Score: {custom_max_val_f1:.4f}
+  • Best Validation Metric: {custom_best_metric:.4f}
   • Test F1 on Target Participant: {custom_model_test_f1:.4f}
   • Epochs trained: {len(custom_trainf1i)}
   • Learning rate: {custom_lr}

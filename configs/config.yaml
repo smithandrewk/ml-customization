@@ -24,8 +24,8 @@ training:
   num_epochs: 5000
   
   # Customization training parameters
-  base_patience: 20      # Early stopping patience for base training phase
-  custom_patience: 20    # Early stopping patience for customization phase
+  base_patience: 5      # Early stopping patience for base training phase
+  custom_patience: 5    # Early stopping patience for customization phase
   custom_learning_rate: 0.0003  # Lower LR for fine-tuning (10x lower than base)
   
 # Participants Configuration

@@ -138,7 +138,7 @@ def moving_average(data, window_size):
     weights = np.ones(window_size) / window_size
     return np.convolve(data, weights, mode='valid')
 
-def plot_training_progress(trainlossi, testlossi=None, targetlossi=None, trainf1i=None, testf1i=None, targetf1i=None, basevalidationlossi=None, targetvalidationlossi=None, basevalidationf1i=None, targetvalidationf1i=None, ma_window_size=10, save_path='training_metrics.jpg', transition_epoch=None, custom_labels=None):
+def plot_training_progress(trainlossi=None, testlossi=None, targetlossi=None, trainf1i=None, testf1i=None, targetf1i=None, basevalidationlossi=None, targetvalidationlossi=None, basevalidationf1i=None, targetvalidationf1i=None, ma_window_size=10, save_path='training_metrics.jpg', transition_epoch=None, custom_labels=None, best_models=None, base_trainlossi=None, target_trainlossi=None, base_trainf1i=None, target_trainf1i=None):
     """
     Plot training progress with loss on top subplot and F1 scores on bottom subplot.
     Both subplots share the x-axis.
@@ -146,13 +146,24 @@ def plot_training_progress(trainlossi, testlossi=None, targetlossi=None, trainf1
     # Set up figure with two subplots sharing x-axis
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 14), sharex=True, gridspec_kw={'height_ratios': [1, 1]})
     
-    # Setup colors with professional palette
+    # Setup colors: Blue for base metrics, Orange for target metrics
     colors = {
-        'train': '#0072B2',  # Professional blue
-        'test': '#D55E00',    # Professional orange (legacy, for backward compatibility)
-        'target': '#009E73',  # Professional green (target test)
-        'base_val': '#E69F00',  # Professional orange (base validation)
-        'target_val': '#56B4E9'  # Light blue (target validation)
+        'base': '#0072B2',      # Professional blue for all base metrics
+        'target': '#D55E00',    # Professional orange for all target metrics
+        # Legacy color mappings for backward compatibility
+        'train': '#0072B2',     # Training (base) - blue
+        'test': '#D55E00',      # Legacy test - orange  
+        'base_val': '#0072B2',  # Base validation - blue
+        'target_val': '#D55E00' # Target validation - orange
+    }
+    
+    # Setup linestyles to distinguish metric types
+    linestyles = {
+        'train': '-',           # Solid line for training
+        'val': '--',           # Dashed line for validation  
+        'test': ':',           # Dotted line for test
+        'base_val': '--',      # Base validation - dashed
+        'target_val': '--'     # Target validation - dashed
     }
     
     # PLOT 1: LOSS VALUES
@@ -168,50 +179,83 @@ def plot_training_progress(trainlossi, testlossi=None, targetlossi=None, trainf1
     else:
         x_axis_length = len(trainlossi)
     
-    # Plot raw training loss with low opacity
-    ax1.plot(np.linspace(0, x_axis_length-1, len(trainlossi)), trainlossi, 
-             alpha=0.3, color=colors['train'], linewidth=1, label='_nolegend_')
+    # Plot base training loss (Phase 1 only) with low opacity
+    if base_trainlossi is not None:
+        base_trainlossi_sliced = base_trainlossi[1:]  # Remove first value
+        x_base_trainlossi = np.array(range(len(base_trainlossi_sliced)))
+        ax1.plot(x_base_trainlossi, base_trainlossi_sliced, 
+                 alpha=0.3, color=colors['base'], linestyle=linestyles['train'], linewidth=1, label='_nolegend_')
+    
+    # Plot target training loss (continuous from epoch 0) with low opacity  
+    if target_trainlossi is not None:
+        target_trainlossi_sliced = target_trainlossi[1:]  # Remove first value
+        x_target_trainlossi = np.array(range(len(target_trainlossi_sliced)))
+        ax1.plot(x_target_trainlossi, target_trainlossi_sliced,
+                 alpha=0.3, color=colors['target'], linestyle=linestyles['train'], linewidth=1, label='_nolegend_')
+    
+    # Backward compatibility: if old trainlossi is provided but not the new separate ones
+    if trainlossi is not None and base_trainlossi is None and target_trainlossi is None:
+        ax1.plot(np.linspace(0, x_axis_length-1, len(trainlossi)), trainlossi, 
+                 alpha=0.3, color=colors['base'], linestyle=linestyles['train'], linewidth=1, label='_nolegend_')
     
     if testlossi is not None:
         ax1.plot(np.linspace(0, x_axis_length-1, len(testlossi)), testlossi, 
-                 alpha=0.3, color=colors['test'], linewidth=1, label='_nolegend_')
+                 alpha=0.3, color=colors['target'], linestyle=linestyles['test'], linewidth=1, label='_nolegend_')
     
     if targetlossi is not None:
         ax1.plot(np.linspace(0, x_axis_length-1, len(targetlossi)), targetlossi, 
-                alpha=0.3, color=colors['target'], linewidth=1, label='_nolegend_')
+                alpha=0.3, color=colors['target'], linestyle=linestyles['test'], linewidth=1, label='_nolegend_')
     
-    # Plot moving average if we have enough data
-    if len(trainlossi) > ma_window_size:
+    # Plot base training moving average (Phase 1)
+    if base_trainlossi is not None and len(base_trainlossi) > ma_window_size:
+        base_trainlossi_ma = moving_average(base_trainlossi[1:], ma_window_size)  # Remove first value
+        x_base_trainlossi_ma = np.arange(ma_window_size-1, len(base_trainlossi)-1)
+        base_train_label = custom_labels.get('base_train', 'Base Training Loss (MA)') if custom_labels else 'Base Training Loss (MA)'
+        ax1.plot(x_base_trainlossi_ma, base_trainlossi_ma, color=colors['base'], linestyle=linestyles['train'],
+                 linewidth=2, label=base_train_label)
+        
+        # Mark minimum base training loss
+        min_idx = np.argmin(base_trainlossi_ma)
+        min_val = np.min(base_trainlossi_ma)
+        ax1.plot(x_base_trainlossi_ma[min_idx], min_val, 'o', color=colors['base'], markersize=8)
+    
+    # Plot target training moving average (continuous from epoch 0)
+    if target_trainlossi is not None and len(target_trainlossi) > ma_window_size:
+        target_trainlossi_ma = moving_average(target_trainlossi[1:], ma_window_size)  # Remove first value
+        x_target_trainlossi_ma = np.arange(ma_window_size-1, len(target_trainlossi)-1)
+        target_train_label = custom_labels.get('target_train', 'Target Training Loss (MA)') if custom_labels else 'Target Training Loss (MA)'
+        ax1.plot(x_target_trainlossi_ma, target_trainlossi_ma, color=colors['target'], linestyle=linestyles['train'],
+                 linewidth=2, label=target_train_label)
+        
+        # Mark minimum target training loss
+        min_idx = np.argmin(target_trainlossi_ma)
+        min_val = np.min(target_trainlossi_ma)
+        ax1.plot(x_target_trainlossi_ma[min_idx], min_val, 'o', color=colors['target'], markersize=8)
+    
+    # Backward compatibility for old trainlossi parameter
+    if trainlossi is not None and base_trainlossi is None and target_trainlossi is None and len(trainlossi) > ma_window_size:
         trainlossi_ma = moving_average(trainlossi, ma_window_size)
         x_trainlossi_ma = np.linspace(ma_window_size-1, x_axis_length-1, len(trainlossi_ma))
-        # Determine training label
         train_label = custom_labels.get('train', 'Training Loss (MA)') if custom_labels else 'Training Loss (MA)'
-        ax1.plot(x_trainlossi_ma, trainlossi_ma, color=colors['train'], 
+        ax1.plot(x_trainlossi_ma, trainlossi_ma, color=colors['base'], linestyle=linestyles['train'],
                  linewidth=2, label=train_label)
         
-        # Mark minimum training loss
         min_idx = np.argmin(trainlossi_ma)
         min_val = np.min(trainlossi_ma)
-        ax1.plot(x_trainlossi_ma[min_idx], min_val, 'o', color=colors['train'], markersize=8)
-        ax1.annotate(f'{min_val:.4f}', xy=(x_trainlossi_ma[min_idx], min_val),
-                    xytext=(5, -15), textcoords='offset points', fontsize=10,
-                    arrowprops=dict(arrowstyle='->', color=colors['train']))
+        ax1.plot(x_trainlossi_ma[min_idx], min_val, 'o', color=colors['base'], markersize=8)
     # Plot moving average if we have enough data
     if testlossi is not None and len(testlossi) > ma_window_size:
         testlossi_ma = moving_average(testlossi, ma_window_size)
         x_testlossi_ma = np.linspace(ma_window_size-1, x_axis_length-1, len(testlossi_ma))
         # Determine validation label
         test_label = custom_labels.get('test', 'Validation Loss (MA)') if custom_labels else 'Validation Loss (MA)'
-        ax1.plot(x_testlossi_ma, testlossi_ma, color=colors['test'], 
+        ax1.plot(x_testlossi_ma, testlossi_ma, color=colors['target'], linestyle=linestyles['test'],
                  linewidth=2, label=test_label)
         
         # Mark minimum testing loss
         min_idx = np.argmin(testlossi_ma)
         min_val = np.min(testlossi_ma)
-        ax1.plot(x_testlossi_ma[min_idx], min_val, 'o', color=colors['test'], markersize=8)
-        ax1.annotate(f'{min_val:.4f}', xy=(x_testlossi_ma[min_idx], min_val),
-                    xytext=(5, -15), textcoords='offset points', fontsize=10,
-                    arrowprops=dict(arrowstyle='->', color=colors['test']))
+        ax1.plot(x_testlossi_ma[min_idx], min_val, 'o', color=colors['target'], markersize=8)
     
     if targetlossi is not None:
         # Plot moving average if we have enough data
@@ -220,22 +264,19 @@ def plot_training_progress(trainlossi, testlossi=None, targetlossi=None, trainf1
             x_targetlossi_ma = np.linspace(ma_window_size-1, x_axis_length-1, len(targetlossi_ma))
             # Determine target label
             target_label = custom_labels.get('target', 'Target Test Loss (MA)') if custom_labels else 'Target Test Loss (MA)'
-            ax1.plot(x_targetlossi_ma, targetlossi_ma, color=colors['target'], 
+            ax1.plot(x_targetlossi_ma, targetlossi_ma, color=colors['target'], linestyle=linestyles['test'],
                     linewidth=2, label=target_label)
             
             # Mark minimum targeting loss
             min_idx = np.argmin(targetlossi_ma)
             min_val = np.min(targetlossi_ma)
             ax1.plot(x_targetlossi_ma[min_idx], min_val, 'o', color=colors['target'], markersize=8)
-            ax1.annotate(f'{min_val:.4f}', xy=(x_targetlossi_ma[min_idx], min_val),
-                        xytext=(5, -15), textcoords='offset points', fontsize=10,
-                        arrowprops=dict(arrowstyle='->', color=colors['target']))
     
     # Plot base validation loss if provided
     if basevalidationlossi is not None:
         # Plot raw base validation loss with low opacity
         ax1.plot(np.linspace(0, len(basevalidationlossi)-1, len(basevalidationlossi)), basevalidationlossi, 
-                 alpha=0.3, color=colors['base_val'], linewidth=1, label='_nolegend_')
+                 alpha=0.3, color=colors['base'], linestyle=linestyles['base_val'], linewidth=1, label='_nolegend_')
         
         # Plot moving average if we have enough data
         if len(basevalidationlossi) > ma_window_size:
@@ -243,22 +284,19 @@ def plot_training_progress(trainlossi, testlossi=None, targetlossi=None, trainf1
             x_basevalidationlossi_ma = np.linspace(ma_window_size-1, len(basevalidationlossi)-1, len(basevalidationlossi_ma))
             # Determine base validation label
             base_val_label = custom_labels.get('base_val', 'Base Validation Loss (MA)') if custom_labels else 'Base Validation Loss (MA)'
-            ax1.plot(x_basevalidationlossi_ma, basevalidationlossi_ma, color=colors['base_val'], 
+            ax1.plot(x_basevalidationlossi_ma, basevalidationlossi_ma, color=colors['base'], linestyle=linestyles['base_val'],
                      linewidth=2, label=base_val_label)
             
             # Mark minimum base validation loss
             min_idx = np.argmin(basevalidationlossi_ma)
             min_val = np.min(basevalidationlossi_ma)
-            ax1.plot(x_basevalidationlossi_ma[min_idx], min_val, 'o', color=colors['base_val'], markersize=8)
-            ax1.annotate(f'{min_val:.4f}', xy=(x_basevalidationlossi_ma[min_idx], min_val),
-                        xytext=(5, -15), textcoords='offset points', fontsize=10,
-                        arrowprops=dict(arrowstyle='->', color=colors['base_val']))
+            ax1.plot(x_basevalidationlossi_ma[min_idx], min_val, 'o', color=colors['base'], markersize=8)
     
     # Plot target validation loss if provided
     if targetvalidationlossi is not None:
         # Plot raw target validation loss with low opacity
         ax1.plot(np.linspace(0, len(targetvalidationlossi)-1, len(targetvalidationlossi)), targetvalidationlossi, 
-                 alpha=0.3, color=colors['target_val'], linewidth=1, label='_nolegend_')
+                 alpha=0.3, color=colors['target'], linestyle=linestyles['target_val'], linewidth=1, label='_nolegend_')
         
         # Plot moving average if we have enough data
         if len(targetvalidationlossi) > ma_window_size:
@@ -266,16 +304,13 @@ def plot_training_progress(trainlossi, testlossi=None, targetlossi=None, trainf1
             x_targetvalidationlossi_ma = np.linspace(ma_window_size-1, len(targetvalidationlossi)-1, len(targetvalidationlossi_ma))
             # Determine target validation label
             target_val_label = custom_labels.get('target_val', 'Target Validation Loss (MA)') if custom_labels else 'Target Validation Loss (MA)'
-            ax1.plot(x_targetvalidationlossi_ma, targetvalidationlossi_ma, color=colors['target_val'], 
+            ax1.plot(x_targetvalidationlossi_ma, targetvalidationlossi_ma, color=colors['target'], linestyle=linestyles['target_val'],
                      linewidth=2, label=target_val_label)
             
             # Mark minimum target validation loss
             min_idx = np.argmin(targetvalidationlossi_ma)
             min_val = np.min(targetvalidationlossi_ma)
-            ax1.plot(x_targetvalidationlossi_ma[min_idx], min_val, 'o', color=colors['target_val'], markersize=8)
-            ax1.annotate(f'{min_val:.4f}', xy=(x_targetvalidationlossi_ma[min_idx], min_val),
-                        xytext=(5, -15), textcoords='offset points', fontsize=10,
-                        arrowprops=dict(arrowstyle='->', color=colors['target_val']))
+            ax1.plot(x_targetvalidationlossi_ma[min_idx], min_val, 'o', color=colors['target'], markersize=8)
     
     # Professional styling for loss subplot
     ax1.grid(True, linestyle='--', alpha=0.7)
@@ -288,58 +323,86 @@ def plot_training_progress(trainlossi, testlossi=None, targetlossi=None, trainf1
         ax1.legend(frameon=True, framealpha=0.9)
     
     # PLOT 2: F1 SCORES (only if provided)
-    if trainf1i is not None:
-        # Plot training F1 scores
+    # Plot base training F1 (Phase 1 only)
+    if base_trainf1i is not None:
+        base_trainf1i_sliced = base_trainf1i[1:]  # Remove first value
+        x_base_trainf1i = np.array(range(len(base_trainf1i_sliced)))
+        ax2.plot(x_base_trainf1i, base_trainf1i_sliced, color=colors['base'], linestyle=linestyles['train'],
+                linewidth=1, alpha=0.3, label='_nolegend_')
+    
+    # Plot target training F1 (Phase 2 only)  
+    if target_trainf1i is not None:
+        target_trainf1i_sliced = target_trainf1i[1:]  # Remove first value
+        x_target_trainf1i = np.array(range(len(target_trainf1i_sliced)))
+        ax2.plot(x_target_trainf1i, target_trainf1i_sliced,
+                alpha=0.3, color=colors['target'], linestyle=linestyles['train'], linewidth=1, label='_nolegend_')
+    
+    # Backward compatibility for old trainf1i
+    if trainf1i is not None and base_trainf1i is None and target_trainf1i is None:
         x_trainf1i = np.array(range(len(trainf1i)))
-        ax2.plot(x_trainf1i, trainf1i, '-', color=colors['train'], 
-                linewidth=2,alpha=0.3)
+        ax2.plot(x_trainf1i, trainf1i, color=colors['base'], linestyle=linestyles['train'],
+                linewidth=1, alpha=0.3, label='_nolegend_')
     
     if testf1i is not None:
-        # Plot validation F1 scores
+        # Plot test F1 scores (raw, low opacity) 
         x_testf1i = np.array(range(len(testf1i)))
-        ax2.plot(x_testf1i, testf1i, 'o-', color=colors['test'], 
-                linewidth=2,alpha=0.3)
+        ax2.plot(x_testf1i, testf1i, color=colors['target'], linestyle=linestyles['test'],
+                linewidth=1, alpha=0.3, label='_nolegend_')
     
     if targetf1i is not None:
-        # Plot validation F1 scores
+        # Plot target F1 scores (raw, low opacity)
         x_targetf1i = np.array(range(len(targetf1i)))
-        ax2.plot(x_targetf1i, targetf1i, 'o-', color=colors['target'], 
-                linewidth=2,alpha=0.3)
+        ax2.plot(x_targetf1i, targetf1i, color=colors['target'], linestyle=linestyles['test'],
+                linewidth=1, alpha=0.3, label='_nolegend_')
     
-    # Plot moving average if we have enough data
-    if trainf1i is not None and len(trainf1i) > ma_window_size:
+    # Plot base training F1 moving average (Phase 1)
+    if base_trainf1i is not None and len(base_trainf1i) > ma_window_size:
+        base_trainf1i_ma = moving_average(base_trainf1i[1:], ma_window_size)  # Remove first value
+        x_base_trainf1i_ma = np.arange(ma_window_size-1, len(base_trainf1i)-1)
+        base_train_f1_label = custom_labels.get('base_train_f1', 'Base Training F1 (MA)') if custom_labels else 'Base Training F1 (MA)'
+        ax2.plot(x_base_trainf1i_ma, base_trainf1i_ma, color=colors['base'], linestyle=linestyles['train'],
+                linewidth=2, label=base_train_f1_label)
+        
+        # Mark maximum base training F1 (no marker, just annotation)
+        max_idx = np.argmax(base_trainf1i_ma)
+        max_val = np.max(base_trainf1i_ma)
+    
+    # Plot target training F1 moving average (continuous from epoch 0)
+    if target_trainf1i is not None and len(target_trainf1i) > ma_window_size:
+        target_trainf1i_ma = moving_average(target_trainf1i[1:], ma_window_size)  # Remove first value
+        x_target_trainf1i_ma = np.arange(ma_window_size-1, len(target_trainf1i)-1)
+        target_train_f1_label = custom_labels.get('target_train_f1', 'Target Training F1 (MA)') if custom_labels else 'Target Training F1 (MA)'
+        ax2.plot(x_target_trainf1i_ma, target_trainf1i_ma, color=colors['target'], linestyle=linestyles['train'],
+                linewidth=2, label=target_train_f1_label)
+        
+        # Mark maximum target training F1 (no marker, just annotation)
+        max_idx = np.argmax(target_trainf1i_ma)
+        max_val = np.max(target_trainf1i_ma)
+    
+    # Backward compatibility for old trainf1i parameter
+    if trainf1i is not None and base_trainf1i is None and target_trainf1i is None and len(trainf1i) > ma_window_size:
         trainf1i_ma = moving_average(trainf1i, ma_window_size)
         x_trainf1i_ma = np.linspace(ma_window_size-1, x_axis_length-1, len(trainf1i_ma))
-        # Determine training F1 label
         train_f1_label = custom_labels.get('train_f1', 'Training F1 (MA)') if custom_labels else 'Training F1 (MA)'
-        ax2.plot(x_trainf1i_ma, trainf1i_ma, color=colors['train'], 
+        ax2.plot(x_trainf1i_ma, trainf1i_ma, color=colors['base'], linestyle=linestyles['train'],
                 linewidth=2, label=train_f1_label)
         
-        # Mark minimum training loss
         max_idx = np.argmax(trainf1i_ma)
         max_val = np.max(trainf1i_ma)
-        ax2.plot(x_trainf1i_ma[max_idx], max_val, 'o', color=colors['train'], markersize=8)
-        ax2.annotate(f'{max_val:.4f}', xy=(x_trainf1i_ma[max_idx], max_val),
-                    xytext=(5, -15), textcoords='offset points', fontsize=10,
-                    arrowprops=dict(arrowstyle='->', color=colors['train']))
         
 
     # Plot moving average if we have enough data
     if testf1i is not None and len(testf1i) > ma_window_size:
         testf1i_ma = moving_average(testf1i, ma_window_size)
         x_testf1i_ma = np.linspace(ma_window_size-1, x_axis_length-1, len(testf1i_ma))
-        # Determine validation F1 label
-        test_f1_label = custom_labels.get('test_f1', 'Validation F1 (MA)') if custom_labels else 'Validation F1 (MA)'
-        ax2.plot(x_testf1i_ma, testf1i_ma, color=colors['test'], 
+        # Determine test F1 label
+        test_f1_label = custom_labels.get('test_f1', 'Test F1 (MA)') if custom_labels else 'Test F1 (MA)'
+        ax2.plot(x_testf1i_ma, testf1i_ma, color=colors['target'], linestyle=linestyles['test'],
                 linewidth=2, label=test_f1_label)
         
-        # Mark minimum testing loss
+        # Mark maximum test F1 (no marker, just annotation)
         max_idx = np.argmax(testf1i_ma)
         max_val = np.max(testf1i_ma)
-        ax2.plot(x_testf1i_ma[max_idx], max_val, 'o', color=colors['test'], markersize=8)
-        ax2.annotate(f'{max_val:.4f}', xy=(x_testf1i_ma[max_idx], max_val),
-                    xytext=(5, -15), textcoords='offset points', fontsize=10,
-                    arrowprops=dict(arrowstyle='->', color=colors['test']))
     if targetf1i is not None:
         # Plot moving average if we have enough data
         if len(targetf1i) > ma_window_size:
@@ -347,23 +410,19 @@ def plot_training_progress(trainlossi, testlossi=None, targetlossi=None, trainf1
             x_targetf1i_ma = np.linspace(ma_window_size-1, x_axis_length-1, len(targetf1i_ma))
             # Determine target F1 label
             target_f1_label = custom_labels.get('target_f1', 'Target Test F1 (MA)') if custom_labels else 'Target Test F1 (MA)'
-            ax2.plot(x_targetf1i_ma, targetf1i_ma, color=colors['target'], 
+            ax2.plot(x_targetf1i_ma, targetf1i_ma, color=colors['target'], linestyle=linestyles['test'],
                     linewidth=2, label=target_f1_label)
             
-            # Mark minimum targeting loss
+            # Mark maximum target F1 (no marker, just annotation)
             max_idx = np.argmax(targetf1i_ma)
             max_val = np.max(targetf1i_ma)
-            ax2.plot(x_targetf1i_ma[max_idx], max_val, 'o', color=colors['target'], markersize=8)
-            ax2.annotate(f'{max_val:.4f}', xy=(x_targetf1i_ma[max_idx], max_val),
-                        xytext=(5, -15), textcoords='offset points', fontsize=10,
-                        arrowprops=dict(arrowstyle='->', color=colors['target']))
     
     # Plot base validation F1 scores if provided
     if basevalidationf1i is not None:
         # Plot raw base validation F1 scores with low opacity
         x_basevalidationf1i = np.array(range(len(basevalidationf1i)))
-        ax2.plot(x_basevalidationf1i, basevalidationf1i, 'o-', color=colors['base_val'], 
-                linewidth=2, alpha=0.3)
+        ax2.plot(x_basevalidationf1i, basevalidationf1i, color=colors['base'], linestyle=linestyles['base_val'],
+                linewidth=1, alpha=0.3, label='_nolegend_')
         
         # Plot moving average if we have enough data
         if len(basevalidationf1i) > ma_window_size:
@@ -371,23 +430,19 @@ def plot_training_progress(trainlossi, testlossi=None, targetlossi=None, trainf1
             x_basevalidationf1i_ma = np.linspace(ma_window_size-1, len(basevalidationf1i)-1, len(basevalidationf1i_ma))
             # Determine base validation F1 label
             base_val_f1_label = custom_labels.get('base_val_f1', 'Base Validation F1 (MA)') if custom_labels else 'Base Validation F1 (MA)'
-            ax2.plot(x_basevalidationf1i_ma, basevalidationf1i_ma, color=colors['base_val'], 
+            ax2.plot(x_basevalidationf1i_ma, basevalidationf1i_ma, color=colors['base'], linestyle=linestyles['base_val'],
                     linewidth=2, label=base_val_f1_label)
             
-            # Mark maximum base validation F1
+            # Mark maximum base validation F1 (no marker, just annotation)
             max_idx = np.argmax(basevalidationf1i_ma)
             max_val = np.max(basevalidationf1i_ma)
-            ax2.plot(x_basevalidationf1i_ma[max_idx], max_val, 'o', color=colors['base_val'], markersize=8)
-            ax2.annotate(f'{max_val:.4f}', xy=(x_basevalidationf1i_ma[max_idx], max_val),
-                        xytext=(5, -15), textcoords='offset points', fontsize=10,
-                        arrowprops=dict(arrowstyle='->', color=colors['base_val']))
     
     # Plot target validation F1 scores if provided
     if targetvalidationf1i is not None:
         # Plot raw target validation F1 scores with low opacity
         x_targetvalidationf1i = np.array(range(len(targetvalidationf1i)))
-        ax2.plot(x_targetvalidationf1i, targetvalidationf1i, 'o-', color=colors['target_val'], 
-                linewidth=2, alpha=0.3)
+        ax2.plot(x_targetvalidationf1i, targetvalidationf1i, color=colors['target'], linestyle=linestyles['target_val'],
+                linewidth=1, alpha=0.3, label='_nolegend_')
         
         # Plot moving average if we have enough data
         if len(targetvalidationf1i) > ma_window_size:
@@ -395,16 +450,12 @@ def plot_training_progress(trainlossi, testlossi=None, targetlossi=None, trainf1
             x_targetvalidationf1i_ma = np.linspace(ma_window_size-1, len(targetvalidationf1i)-1, len(targetvalidationf1i_ma))
             # Determine target validation F1 label
             target_val_f1_label = custom_labels.get('target_val_f1', 'Target Validation F1 (MA)') if custom_labels else 'Target Validation F1 (MA)'
-            ax2.plot(x_targetvalidationf1i_ma, targetvalidationf1i_ma, color=colors['target_val'], 
+            ax2.plot(x_targetvalidationf1i_ma, targetvalidationf1i_ma, color=colors['target'], linestyle=linestyles['target_val'],
                     linewidth=2, label=target_val_f1_label)
             
-            # Mark maximum target validation F1
+            # Mark maximum target validation F1 (no marker, just annotation)
             max_idx = np.argmax(targetvalidationf1i_ma)
             max_val = np.max(targetvalidationf1i_ma)
-            ax2.plot(x_targetvalidationf1i_ma[max_idx], max_val, 'o', color=colors['target_val'], markersize=8)
-            ax2.annotate(f'{max_val:.4f}', xy=(x_targetvalidationf1i_ma[max_idx], max_val),
-                        xytext=(5, -15), textcoords='offset points', fontsize=10,
-                        arrowprops=dict(arrowstyle='->', color=colors['target_val']))
             
     if transition_epoch is not None:
         # Add vertical line for transition epoch
@@ -412,6 +463,7 @@ def plot_training_progress(trainlossi, testlossi=None, targetlossi=None, trainf1
             # Add vertical line for transition epoch
             ax1.axvline(x=transition_epoch, color='gray', linestyle='--', linewidth=1, label='Transition Epoch')
             ax2.axvline(x=transition_epoch, color='gray', linestyle='--', linewidth=1, label='Transition Epoch')
+
 
     # Professional styling for F1 subplot
     ax2.grid(True, linestyle='--', alpha=0.7)
