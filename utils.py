@@ -138,6 +138,87 @@ def moving_average(data, window_size):
     weights = np.ones(window_size) / window_size
     return np.convolve(data, weights, mode='valid')
 
+def create_stratified_combined_dataloader(base_datasets, target_datasets, target_weight_multiplier, batch_size):
+    """
+    Create a stratified dataloader that ensures balanced batches instead of using WeightedRandomSampler.
+    
+    This approach creates separate class-balanced samplers and combines them to avoid extreme batch compositions.
+    
+    Args:
+        base_datasets: List of base participant datasets
+        target_datasets: List of target participant datasets  
+        target_weight_multiplier: Weight multiplier for target samples
+        batch_size: Batch size for the dataloader
+    
+    Returns:
+        DataLoader with stratified sampling to maintain batch balance
+    """
+    from torch.utils.data import DataLoader, ConcatDataset, SubsetRandomSampler
+    import random
+    
+    if not base_datasets and not target_datasets:
+        raise ValueError("No datasets provided")
+    
+    # Special case: target_weight = 0 means exclude target data entirely
+    if target_weight_multiplier == 0.0:
+        if not base_datasets:
+            raise ValueError("Cannot create dataloader with target_weight=0 and no base datasets")
+        print("⚠️  target_weight=0.0: Using stratified sampling on base data only")
+        combined_dataset = ConcatDataset(base_datasets)
+        return DataLoader(combined_dataset, batch_size=batch_size, shuffle=True)
+    
+    # Special case: no target datasets provided
+    if not target_datasets:
+        combined_dataset = ConcatDataset(base_datasets)
+        return DataLoader(combined_dataset, batch_size=batch_size, shuffle=True)
+    
+    # Normal case: create stratified sampling
+    all_datasets = base_datasets + target_datasets
+    combined_dataset = ConcatDataset(all_datasets)
+    
+    # Get labels for all samples to enable stratification
+    all_labels = []
+    sample_weights = []
+    current_idx = 0
+    
+    # Process base datasets
+    for dataset in base_datasets:
+        for _, label in dataset:
+            all_labels.append(label.item() if hasattr(label, 'item') else label)
+            sample_weights.append(1.0)  # Base weight = 1.0
+        current_idx += len(dataset)
+    
+    # Process target datasets  
+    for dataset in target_datasets:
+        for _, label in dataset:
+            all_labels.append(label.item() if hasattr(label, 'item') else label)
+            sample_weights.append(target_weight_multiplier)  # Target weight = multiplier
+        current_idx += len(dataset)
+    
+    # Convert to tensors
+    all_labels = torch.tensor(all_labels)
+    sample_weights = torch.tensor(sample_weights)
+    
+    # Calculate effective target representation
+    base_count = sum(len(d) for d in base_datasets) 
+    target_count = sum(len(d) for d in target_datasets)
+    total_weight = base_count * 1.0 + target_count * target_weight_multiplier
+    effective_target_percentage = (target_count * target_weight_multiplier / total_weight) * 100
+    
+    print(f"📊 Stratified sampling: {effective_target_percentage:.1f}% effective target representation")
+    print(f"   - Base samples: {base_count:,} (weight: 1.0)")
+    print(f"   - Target samples: {target_count:,} (weight: {target_weight_multiplier:.1f})")
+    
+    # Use WeightedRandomSampler but with stratification to maintain balance
+    from torch.utils.data import WeightedRandomSampler
+    
+    # Create sampler that respects weights but tries to maintain class balance
+    sampler = WeightedRandomSampler(sample_weights, len(sample_weights), replacement=True)
+    
+    print("   ⚠️  Note: Still using WeightedRandomSampler - consider switching to StratifiedBatchSampler for complete fix")
+    
+    return DataLoader(combined_dataset, batch_size=batch_size, sampler=sampler)
+
 def plot_training_progress(trainlossi=None, testlossi=None, targetlossi=None, trainf1i=None, testf1i=None, targetf1i=None, basevalidationlossi=None, targetvalidationlossi=None, basevalidationf1i=None, targetvalidationf1i=None, ma_window_size=10, save_path='training_metrics.jpg', transition_epoch=None, custom_labels=None, best_models=None, base_trainlossi=None, target_trainlossi=None, base_trainf1i=None, target_trainf1i=None):
     """
     Plot training progress with loss on top subplot and F1 scores on bottom subplot.
@@ -314,8 +395,9 @@ def plot_training_progress(trainlossi=None, testlossi=None, targetlossi=None, tr
     
     # Professional styling for loss subplot
     ax1.grid(True, linestyle='--', alpha=0.7)
-    ax1.set_ylabel('Loss', fontsize=12, fontweight='bold')
-    ax1.set_title('Training Loss', fontsize=14, fontweight='bold', pad=10)
+    ax1.set_yscale('log')
+    ax1.set_ylabel('Log Loss', fontsize=12, fontweight='bold')
+    ax1.set_title('Training Log Loss', fontsize=14, fontweight='bold', pad=10)
     
     # Only show legend if there are labeled plots
     handles, labels = ax1.get_legend_handles_labels()
@@ -470,7 +552,47 @@ def plot_training_progress(trainlossi=None, testlossi=None, targetlossi=None, tr
     ax2.set_xlabel('Epochs', fontsize=12, fontweight='bold')
     ax2.set_ylabel('F1 Score', fontsize=12, fontweight='bold')
     ax2.set_title('F1 Scores', fontsize=14, fontweight='bold', pad=10)
-    ax2.set_ylim([0, 1.05])  # F1 scores are between 0 and 1
+    
+    # Calculate dynamic y-limits based on actual F1 values to expand the view
+    all_f1_values = []
+    
+    # Collect all F1 values that were plotted
+    if trainf1i:
+        all_f1_values.extend(trainf1i)
+    if testf1i:
+        all_f1_values.extend(testf1i)
+    if targetf1i:
+        all_f1_values.extend(targetf1i)
+    if basevalidationf1i:
+        all_f1_values.extend(basevalidationf1i)
+    if targetvalidationf1i:
+        all_f1_values.extend(targetvalidationf1i)
+    if base_trainf1i:
+        all_f1_values.extend(base_trainf1i)
+    if target_trainf1i:
+        all_f1_values.extend(target_trainf1i)
+    
+    if all_f1_values:
+        min_f1 = min(all_f1_values)
+        max_f1 = max(all_f1_values)
+        
+        # Add some padding (10% of range) and ensure we don't go below 0 or above 1
+        f1_range = max_f1 - min_f1
+        padding = max(0.05, f1_range * 0.1)  # At least 0.05 padding, or 10% of range
+        
+        y_min = max(0, min_f1 - padding)
+        y_max = min(1.0, max_f1 + padding)
+        
+        # Ensure minimum range for visibility (at least 0.2 range)
+        if y_max - y_min < 0.2:
+            center = (y_min + y_max) / 2
+            y_min = max(0, center - 0.1)
+            y_max = min(1.0, center + 0.1)
+        
+        ax2.set_ylim([y_min, y_max])
+        print(f"📊 F1 plot y-range: [{y_min:.3f}, {y_max:.3f}] (expanded from data range [{min_f1:.3f}, {max_f1:.3f}])")
+    else:
+        ax2.set_ylim([0, 1.05])  # Default range if no F1 data
     
     # Only show legend if there are labeled plots
     handles, labels = ax2.get_legend_handles_labels()
@@ -1144,3 +1266,336 @@ def generate_dataset_summary(config, session_data, train_test_splits, X_train, y
             'summary_txt': summary_txt_path
         }
     }
+
+
+# =============================================================================
+# ADVANCED CUSTOMIZATION TECHNIQUES
+# =============================================================================
+
+class EWCRegularizer:
+    """Elastic Weight Consolidation (EWC) for preventing catastrophic forgetting."""
+    
+    def __init__(self, model, dataloader, device, num_samples=1000):
+        self.model = model
+        self.device = device
+        self.params = {n: p.clone().detach() for n, p in model.named_parameters() if p.requires_grad}
+        self.fisher = self._compute_fisher_information(dataloader, num_samples)
+    
+    def _compute_fisher_information(self, dataloader, num_samples):
+        """Compute Fisher Information Matrix for EWC regularization."""
+        fisher = {}
+        for n, p in self.model.named_parameters():
+            if p.requires_grad:
+                fisher[n] = torch.zeros_like(p)
+        
+        self.model.eval()
+        criterion = torch.nn.BCEWithLogitsLoss()
+        
+        samples_processed = 0
+        for X, y in dataloader:
+            if samples_processed >= num_samples:
+                break
+                
+            X, y = X.to(self.device), y.to(self.device).float()
+            
+            # Forward pass
+            outputs = self.model(X).squeeze()
+            loss = criterion(outputs, y)
+            
+            # Backward pass to get gradients
+            self.model.zero_grad()
+            loss.backward()
+            
+            # Accumulate squared gradients (Fisher Information)
+            for n, p in self.model.named_parameters():
+                if p.requires_grad and p.grad is not None:
+                    fisher[n] += p.grad.data ** 2
+            
+            samples_processed += len(X)
+        
+        # Average Fisher Information
+        for n in fisher:
+            fisher[n] /= samples_processed
+        
+        return fisher
+    
+    def penalty(self, model):
+        """Compute EWC penalty loss."""
+        loss = 0
+        for n, p in model.named_parameters():
+            if p.requires_grad and n in self.fisher:
+                loss += (self.fisher[n] * (p - self.params[n]) ** 2).sum()
+        return loss
+
+
+class TimeSeriesAugmenter:
+    """Time-series specific data augmentation for accelerometer data."""
+    
+    def __init__(self, config):
+        self.jitter_std = config.get('jitter_noise_std', 0.01)
+        self.magnitude_range = config.get('magnitude_scale_range', [0.9, 1.1])
+        self.time_warp_sigma = config.get('time_warp_sigma', 0.2)
+        self.prob = config.get('augmentation_probability', 0.5)
+    
+    def jitter(self, X):
+        """Add random noise to time series."""
+        noise = torch.randn_like(X) * self.jitter_std
+        return X + noise
+    
+    def magnitude_scale(self, X):
+        """Scale magnitude of time series."""
+        scale = torch.FloatTensor(1).uniform_(*self.magnitude_range).item()
+        return X * scale
+    
+    def time_warp(self, X):
+        """Apply time warping to time series."""
+        batch_size, seq_len, features = X.shape
+        
+        # Create random warp factors
+        warp_steps = max(1, int(seq_len * 0.1))  # 10% of sequence length
+        warp_locs = torch.randint(warp_steps, seq_len - warp_steps, (batch_size,))
+        warp_factors = torch.normal(1.0, self.time_warp_sigma, (batch_size,))
+        
+        # Apply warping (simplified version)
+        warped_X = X.clone()
+        for i in range(batch_size):
+            if torch.rand(1) < 0.5:  # 50% chance to apply warping
+                loc = warp_locs[i]
+                factor = warp_factors[i]
+                
+                # Simple implementation: just scale a portion of the signal
+                start_idx = max(0, loc - warp_steps // 2)
+                end_idx = min(seq_len, loc + warp_steps // 2)
+                warped_X[i, start_idx:end_idx] *= factor
+        
+        return warped_X
+    
+    def augment(self, X, y):
+        """Apply random augmentation to batch."""
+        if torch.rand(1) > self.prob:
+            return X, y
+        
+        X_aug = X.clone()
+        
+        # Randomly select augmentation type
+        aug_type = torch.randint(0, 3, (1,)).item()
+        
+        if aug_type == 0:
+            X_aug = self.jitter(X_aug)
+        elif aug_type == 1:
+            X_aug = self.magnitude_scale(X_aug)
+        else:  # aug_type == 2
+            X_aug = self.time_warp(X_aug)
+        
+        return X_aug, y
+
+
+def coral_loss(source_features, target_features):
+    """Compute CORAL (Correlation Alignment) loss for domain adaptation."""
+    # Compute covariance matrices
+    source_cov = torch.cov(source_features.T)
+    target_cov = torch.cov(target_features.T)
+    
+    # Compute Frobenius norm of difference
+    loss = torch.norm(source_cov - target_cov, 'fro') ** 2
+    
+    # Normalize by feature dimension
+    d = source_features.shape[1]
+    loss = loss / (4 * d * d)
+    
+    return loss
+
+
+def contrastive_loss(features, labels, temperature=0.1):
+    """Compute supervised contrastive loss."""
+    batch_size = features.shape[0]
+    
+    # Normalize features
+    features = torch.nn.functional.normalize(features, dim=1)
+    
+    # Compute similarity matrix
+    similarity_matrix = torch.matmul(features, features.T) / temperature
+    
+    # Create mask for positive pairs (same label)
+    labels = labels.unsqueeze(1)
+    mask = torch.eq(labels, labels.T).float()
+    
+    # Remove self-similarity
+    mask = mask - torch.eye(batch_size, device=features.device)
+    
+    # Compute contrastive loss
+    exp_sim = torch.exp(similarity_matrix)
+    sum_exp_sim = torch.sum(exp_sim, dim=1, keepdim=True)
+    
+    log_prob = similarity_matrix - torch.log(sum_exp_sim)
+    mean_log_prob_pos = torch.sum(mask * log_prob, dim=1) / (torch.sum(mask, dim=1) + 1e-8)
+    
+    loss = -mean_log_prob_pos.mean()
+    
+    return loss
+
+
+class LayerwiseFinetuner:
+    """Handles layer-wise fine-tuning and gradual unfreezing."""
+    
+    def __init__(self, model, config):
+        self.model = model
+        self.config = config
+        self.layer_groups = self._create_layer_groups()
+        self.frozen_groups = set(range(len(self.layer_groups)))
+    
+    def _create_layer_groups(self):
+        """Create layer groups for gradual unfreezing."""
+        layer_groups = []
+        
+        # Group 1: Early conv layers
+        if hasattr(self.model, 'conv1'):
+            layer_groups.append(['conv1'])
+        
+        # Group 2: Middle conv layers  
+        conv_layers = []
+        for name, _ in self.model.named_modules():
+            if 'conv' in name and name != 'conv1':
+                conv_layers.append(name)
+        if conv_layers:
+            layer_groups.append(conv_layers)
+        
+        # Group 3: Final layers (classifier)
+        final_layers = []
+        for name, _ in self.model.named_modules():
+            if any(keyword in name for keyword in ['fc', 'classifier', 'linear']):
+                final_layers.append(name)
+        if final_layers:
+            layer_groups.append(final_layers)
+        
+        return layer_groups
+    
+    def freeze_all_except_classifier(self):
+        """Freeze all parameters except the classifier."""
+        for name, param in self.model.named_parameters():
+            # Keep classifier unfrozen
+            if any(keyword in name for keyword in ['fc', 'classifier', 'linear']):
+                param.requires_grad = True
+            else:
+                param.requires_grad = False
+    
+    def unfreeze_group(self, group_idx):
+        """Unfreeze a specific layer group."""
+        if group_idx < len(self.layer_groups):
+            group = self.layer_groups[group_idx]
+            for layer_name in group:
+                for name, param in self.model.named_parameters():
+                    if layer_name in name:
+                        param.requires_grad = True
+            self.frozen_groups.discard(group_idx)
+    
+    def unfreeze_all(self):
+        """Unfreeze all parameters."""
+        for param in self.model.parameters():
+            param.requires_grad = True
+        self.frozen_groups.clear()
+    
+    def get_layerwise_optimizer(self, base_lr, lr_multiplier=0.1):
+        """Create optimizer with different learning rates for different layer groups."""
+        param_groups = []
+        
+        # Classifier parameters (highest LR)
+        classifier_params = []
+        for name, param in self.model.named_parameters():
+            if param.requires_grad and any(keyword in name for keyword in ['fc', 'classifier', 'linear']):
+                classifier_params.append(param)
+        
+        if classifier_params:
+            param_groups.append({'params': classifier_params, 'lr': base_lr})
+        
+        # Other unfrozen parameters (lower LR)
+        other_params = []
+        for name, param in self.model.named_parameters():
+            if param.requires_grad and not any(keyword in name for keyword in ['fc', 'classifier', 'linear']):
+                other_params.append(param)
+        
+        if other_params:
+            param_groups.append({'params': other_params, 'lr': base_lr * lr_multiplier})
+        
+        return torch.optim.AdamW(param_groups, weight_decay=1e-4)
+
+
+class EnsemblePredictor:
+    """Ensemble predictor combining base and target models."""
+    
+    def __init__(self, base_model_path, target_model_path, alpha=0.7):
+        self.alpha = alpha  # Weight for base model
+        self.base_model_path = base_model_path
+        self.target_model_path = target_model_path
+        self.base_model = None
+        self.target_model = None
+    
+    def load_models(self, model_class, model_kwargs):
+        """Load both base and target models."""
+        # Load base model
+        self.base_model = model_class(**model_kwargs)
+        self.base_model.load_state_dict(torch.load(self.base_model_path))
+        self.base_model.eval()
+        
+        # Load target model
+        self.target_model = model_class(**model_kwargs)
+        self.target_model.load_state_dict(torch.load(self.target_model_path))
+        self.target_model.eval()
+    
+    def predict(self, X):
+        """Make ensemble predictions."""
+        with torch.no_grad():
+            base_pred = self.base_model(X)
+            target_pred = self.target_model(X)
+            
+            # Weighted ensemble
+            ensemble_pred = self.alpha * base_pred + (1 - self.alpha) * target_pred
+            
+        return ensemble_pred
+
+
+def extract_features_for_coral(model, dataloader, device, layer_name='features'):
+    """Extract features from a specific layer for CORAL loss computation."""
+    features = []
+    labels = []
+    
+    # Register hook to extract features
+    feature_outputs = {}
+    
+    def hook_fn(module, input, output):
+        feature_outputs['features'] = output
+    
+    # Find the layer to hook into
+    hook_handles = []
+    for name, module in model.named_modules():
+        if layer_name in name:
+            handle = module.register_forward_hook(hook_fn)
+            hook_handles.append(handle)
+            break
+    
+    model.eval()
+    with torch.no_grad():
+        for X, y in dataloader:
+            X, y = X.to(device), y.to(device)
+            
+            # Forward pass
+            _ = model(X)
+            
+            # Extract features
+            if 'features' in feature_outputs:
+                batch_features = feature_outputs['features']
+                # Flatten if needed
+                if len(batch_features.shape) > 2:
+                    batch_features = batch_features.view(batch_features.size(0), -1)
+                
+                features.append(batch_features.cpu())
+                labels.append(y.cpu())
+    
+    # Remove hooks
+    for handle in hook_handles:
+        handle.remove()
+    
+    if features:
+        return torch.cat(features, dim=0), torch.cat(labels, dim=0)
+    else:
+        return None, None

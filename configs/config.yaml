@@ -4,7 +4,7 @@
 dataset:
   fs: 50  # Sampling frequency (Hz)
   window_size_seconds: 60  # Window size in seconds
-  window_stride_seconds: 60  # Window stride in seconds
+  window_stride_seconds: 30  # Window stride in seconds
   labeling: "andrew smoking labels"  # Label type to use
   test_size: 0.2  # Train/test split ratio
 
@@ -24,16 +24,57 @@ training:
   num_epochs: 5000
   
   # Customization training parameters
-  base_patience: 5      # Early stopping patience for base training phase
-  custom_patience: 5    # Early stopping patience for customization phase
+  base_patience: 40      # Early stopping patience for base training phase
+  custom_patience: 40    # Early stopping patience for customization phase
   custom_learning_rate: 0.0003  # Lower LR for fine-tuning (10x lower than base)
   target_weight_multiplier: 5.0  # Weight multiplier for target samples in Phase 2 (1.0 = equal weighting)
+  
+  # Advanced customization techniques (for ablation studies)
+  advanced_techniques:
+    # Layer-wise fine-tuning
+    use_layerwise_finetuning: false
+    layerwise_classifier_epochs: 5  # Epochs to train only classifier first
+    layerwise_lr_multiplier: 0.1    # LR multiplier for frozen layers when unfrozen
+    
+    # Gradual unfreezing
+    use_gradual_unfreezing: false
+    unfreeze_schedule: [5, 10, 15]   # Epochs at which to unfreeze layer groups
+    
+    # Elastic Weight Consolidation (EWC)
+    use_ewc: false
+    ewc_lambda: 1000.0               # EWC regularization strength
+    fisher_samples: 1000             # Number of samples for Fisher Information Matrix
+    
+    # Data augmentation
+    use_augmentation: false
+    augmentation:
+      jitter_noise_std: 0.01         # Standard deviation for jittering noise
+      magnitude_scale_range: [0.9, 1.1]  # Range for magnitude scaling
+      time_warp_sigma: 0.2           # Sigma for time warping
+      augmentation_probability: 0.5   # Probability of applying augmentation
+      
+    # CORAL domain adaptation
+    use_coral: false
+    coral_lambda: 1.0                # CORAL loss weight
+    
+    # Ensemble approach
+    use_ensemble: false
+    ensemble_alpha: 0.7              # Weight for base model in ensemble (0.7 base + 0.3 target)
+    
+    # Contrastive learning
+    use_contrastive: false
+    contrastive_lambda: 0.1          # Contrastive loss weight
+    contrastive_temperature: 0.1     # Temperature for contrastive loss
   
 # Participants Configuration
 participants:
   - "tonmoy"
   - "asfik"
   - "ejaz"
+  - "alsaad"
+  - "anam"
+  - "iftakhar"
+  - "unk1"
 
 # Visualization Configuration
 visualization:

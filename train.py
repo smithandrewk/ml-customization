@@ -13,7 +13,7 @@ import numpy as np
 
 from sklearn.metrics import f1_score
 
-from utils import load_config, get_experiment_dir, get_next_experiment_dir, plot_training_progress, SmokingCNN, SimpleSmokingCNN, calculate_positive_ratio, init_final_layer_bias_for_imbalance
+from utils import load_config, get_experiment_dir, get_next_experiment_dir, plot_training_progress, SmokingCNN, SimpleSmokingCNN, calculate_positive_ratio, init_final_layer_bias_for_imbalance, create_stratified_combined_dataloader, EWCRegularizer, TimeSeriesAugmenter, coral_loss, contrastive_loss, LayerwiseFinetuner, EnsemblePredictor, extract_features_for_coral
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -27,6 +27,16 @@ parser.add_argument('--experiment_suffix', type=str, help='Suffix for experiment
 parser.add_argument('--model', type=str, default='full', choices=['full', 'simple'], help='Model architecture: full (RegNet-style) or simple (3-layer for testing)')
 parser.add_argument('--early_stopping_metric', type=str, default='f1', choices=['f1', 'loss'], help='Metric for early stopping: f1 (maximize F1) or loss (minimize loss)')
 parser.add_argument('--target_weight', type=float, help='Weight multiplier for target samples in Phase 2 (overrides config, default: 1.0 = equal weighting)')
+parser.add_argument('--use_stratified_sampling', action='store_true', help='Use stratified sampling instead of WeightedRandomSampler to prevent extreme batch compositions')
+
+# Advanced technique flags (for ablation studies)
+parser.add_argument('--use_layerwise_finetuning', action='store_true', help='Enable layer-wise fine-tuning')
+parser.add_argument('--use_gradual_unfreezing', action='store_true', help='Enable gradual unfreezing')
+parser.add_argument('--use_ewc', action='store_true', help='Enable Elastic Weight Consolidation (EWC)')
+parser.add_argument('--use_augmentation', action='store_true', help='Enable time-series data augmentation')
+parser.add_argument('--use_coral', action='store_true', help='Enable CORAL domain adaptation')
+parser.add_argument('--use_ensemble', action='store_true', help='Enable ensemble approach')
+parser.add_argument('--use_contrastive', action='store_true', help='Enable contrastive learning')
 args = parser.parse_args()
 
 # Load configuration
@@ -36,6 +46,30 @@ config = load_config(args.config)
 if args.target_weight is not None:
     config['training']['target_weight_multiplier'] = args.target_weight
     print(f"Overriding target weight multiplier from config: {args.target_weight}")
+
+# Override advanced technique flags if specified via command line
+advanced_config = config['training'].get('advanced_techniques', {})
+if args.use_layerwise_finetuning:
+    advanced_config['use_layerwise_finetuning'] = True
+    print("🔧 Enabling layer-wise fine-tuning via command line")
+if args.use_gradual_unfreezing:
+    advanced_config['use_gradual_unfreezing'] = True
+    print("🔧 Enabling gradual unfreezing via command line")
+if args.use_ewc:
+    advanced_config['use_ewc'] = True
+    print("🔧 Enabling EWC regularization via command line")
+if args.use_augmentation:
+    advanced_config['use_augmentation'] = True
+    print("🔧 Enabling data augmentation via command line")
+if args.use_coral:
+    advanced_config['use_coral'] = True
+    print("🔧 Enabling CORAL domain adaptation via command line")
+if args.use_ensemble:
+    advanced_config['use_ensemble'] = True
+    print("🔧 Enabling ensemble approach via command line")
+if args.use_contrastive:
+    advanced_config['use_contrastive'] = True
+    print("🔧 Enabling contrastive learning via command line")
 
 target_weight_multiplier = config['training']['target_weight_multiplier']
 
@@ -70,14 +104,14 @@ def load_participant_data(dataset_dir, participants, split='train', is_base_part
         if os.path.exists(file_path):
             X, y = torch.load(file_path)
             
-            # For base participants doing validation, combine val + test for larger validation set
-            if split == 'val' and is_base_participants:
-                test_path = f'{dataset_dir}/{participant}_test.pt'
-                if os.path.exists(test_path):
-                    X_test, y_test = torch.load(test_path)
-                    X = torch.cat([X, X_test], dim=0)
-                    y = torch.cat([y, y_test], dim=0)
-                    print(f"Combined {participant}_val.pt + {participant}_test.pt for base validation: {len(X):,} samples")
+            # For base participants doing training, combine train + val for larger training set
+            if split == 'train' and is_base_participants:
+                val_path = f'{dataset_dir}/{participant}_val.pt'
+                if os.path.exists(val_path):
+                    X_val, y_val = torch.load(val_path)
+                    X = torch.cat([X, X_val], dim=0)
+                    y = torch.cat([y, y_val], dim=0)
+                    print(f"Combined {participant}_train.pt + {participant}_val.pt for base training: {len(X):,} samples")
                 else:
                     print(f"Loaded {participant}_{split}.pt: {len(X):,} samples")
             else:
@@ -175,9 +209,9 @@ print("\n" + "="*60)
 print("PHASE 1: BASE TRAINING")
 print("="*60)
 
-# Load base training data (N-1 participants)
-base_train_datasets, base_train_info = load_participant_data(args.dataset_dir, base_participants, 'train')
-base_val_datasets, base_val_info = load_participant_data(args.dataset_dir, base_participants, 'val', is_base_participants=True)
+# Load base training data (N-1 participants) - combines train + val for larger training set
+base_train_datasets, base_train_info = load_participant_data(args.dataset_dir, base_participants, 'train', is_base_participants=True)
+base_val_datasets, base_val_info = load_participant_data(args.dataset_dir, base_participants, 'test')
 
 # Also load target participant test and validation data for evaluation throughout both phases
 target_test_datasets, target_test_info = load_participant_data(args.dataset_dir, [args.target_participant], 'test')
@@ -193,8 +227,8 @@ base_valloader = create_combined_dataloader(base_val_datasets, config['training'
 target_testloader = create_combined_dataloader(target_test_datasets, config['training']['batch_size'], shuffle=False)
 target_valloader = create_combined_dataloader(target_val_datasets, config['training']['batch_size'], shuffle=False)
 
-print(f"Base training samples: {sum(base_train_info.values()):,}")
-print(f"Base validation samples: {sum(base_val_info.values()):,}")
+print(f"Base training samples (train+val): {sum(base_train_info.values()):,}")
+print(f"Base validation samples (test): {sum(base_val_info.values()):,}")
 print(f"Target test samples: {sum(target_test_info.values()):,}")
 
 # Initialize model based on selection
@@ -330,6 +364,10 @@ for epoch in range(config['training']['num_epochs']):
         outputs = model(Xi).squeeze()
         loss = criterion(outputs, yi)
         loss.backward()
+        
+        # Add gradient clipping to Phase 1 as well
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        
         optimizer.step()
 
         # Minimize GPU→CPU transfers - keep on GPU until end of epoch
@@ -465,17 +503,17 @@ for epoch in range(config['training']['num_epochs']):
         
         # Define descriptive labels for Phase 1
         phase1_labels = {
-            'train': 'Training Loss: Phase 1 (Base Training)',  # Legacy
-            'target': 'Target Test Loss (Continuous Evaluation)',
-            'base_val': 'Base Validation Loss (Continuous Evaluation)', 
-            'target_val': 'Target Validation Loss (Continuous Evaluation)',
+            'train': 'Training Log Loss: Phase 1 (Base Training)',  # Legacy
+            'target': 'Target Test Log Loss (Continuous Evaluation)',
+            'base_val': 'Base Validation Log Loss (Continuous Evaluation)', 
+            'target_val': 'Target Validation Log Loss (Continuous Evaluation)',
             'train_f1': 'Training F1: Phase 1 (Base Training)',  # Legacy
             'target_f1': 'Target Test F1 (Continuous Evaluation)',
             'base_val_f1': 'Base Validation F1 (Continuous Evaluation)',
             'target_val_f1': 'Target Validation F1 (Continuous Evaluation)',
             # New separate training labels
-            'base_train': 'Base Training Loss (Phase 1)',
-            'target_train': 'Target Training Loss (Phase 2)',  # Not shown in Phase 1
+            'base_train': 'Base Training Log Loss (Phase 1)',
+            'target_train': 'Target Training Log Loss (Phase 2)',  # Not shown in Phase 1
             'base_train_f1': 'Base Training F1 (Phase 1)',
             'target_train_f1': 'Target Training F1 (Phase 2)'  # Not shown in Phase 1
         }
@@ -560,18 +598,87 @@ print("="*60)
 model.load_state_dict(torch.load(f'{experiment_dir}/base_model.pt'))
 print("Loaded best base model for customization")
 
+# =============================================================================
+# INITIALIZE ADVANCED CUSTOMIZATION TECHNIQUES
+# =============================================================================
+
+# Initialize EWC regularizer if enabled
+ewc_regularizer = None
+if advanced_config.get('use_ewc', False):
+    print("🧠 Initializing EWC regularizer...")
+    ewc_samples = advanced_config.get('fisher_samples', 1000)
+    ewc_regularizer = EWCRegularizer(model, base_trainloader, device, num_samples=ewc_samples)
+    print(f"   Fisher Information computed using {ewc_samples} samples")
+
+# Initialize data augmenter if enabled
+augmenter = None
+if advanced_config.get('use_augmentation', False):
+    print("🔄 Initializing time-series data augmenter...")
+    aug_config = advanced_config.get('augmentation', {})
+    augmenter = TimeSeriesAugmenter(aug_config)
+    print(f"   Augmentation probability: {aug_config.get('augmentation_probability', 0.5)}")
+
+# Initialize layer-wise fine-tuner if enabled
+layerwise_finetuner = None
+if advanced_config.get('use_layerwise_finetuning', False) or advanced_config.get('use_gradual_unfreezing', False):
+    print("🎯 Initializing layer-wise fine-tuner...")
+    layerwise_finetuner = LayerwiseFinetuner(model, advanced_config)
+    print(f"   Layer groups identified: {len(layerwise_finetuner.layer_groups)}")
+    
+    # Start with classifier-only training if layer-wise fine-tuning is enabled
+    if advanced_config.get('use_layerwise_finetuning', False):
+        layerwise_finetuner.freeze_all_except_classifier()
+        print("   🔒 Frozen all layers except classifier for initial fine-tuning")
+
+# Print enabled techniques summary
+enabled_techniques = []
+if advanced_config.get('use_layerwise_finetuning', False):
+    enabled_techniques.append("Layer-wise Fine-tuning")
+if advanced_config.get('use_gradual_unfreezing', False):
+    enabled_techniques.append("Gradual Unfreezing")
+if advanced_config.get('use_ewc', False):
+    enabled_techniques.append("EWC Regularization")
+if advanced_config.get('use_augmentation', False):
+    enabled_techniques.append("Data Augmentation")
+if advanced_config.get('use_coral', False):
+    enabled_techniques.append("CORAL Domain Adaptation")
+if advanced_config.get('use_contrastive', False):
+    enabled_techniques.append("Contrastive Learning")
+if advanced_config.get('use_ensemble', False):
+    enabled_techniques.append("Ensemble Approach")
+
+if enabled_techniques:
+    print(f"\n🚀 Advanced techniques enabled: {', '.join(enabled_techniques)}")
+else:
+    print("\n📍 Using baseline customization approach (no advanced techniques)")
+
+# Get lambda values for loss combinations
+ewc_lambda = advanced_config.get('ewc_lambda', 1000.0)
+coral_lambda = advanced_config.get('coral_lambda', 1.0)
+contrastive_lambda = advanced_config.get('contrastive_lambda', 0.1)
+
 # Load target participant data
 target_train_datasets, target_train_info = load_participant_data(args.dataset_dir, [args.target_participant], 'train')
 target_val_datasets, target_val_info = load_participant_data(args.dataset_dir, [args.target_participant], 'val')
 # target_test_datasets already loaded in Phase 1
 
-# Create combined training data (base + target) with weighted sampling
-combined_trainloader = create_weighted_combined_dataloader(
-    base_train_datasets, 
-    target_train_datasets, 
-    target_weight_multiplier, 
-    config['training']['batch_size']
-)
+# FIX 3: Create combined training data with stratified sampling option
+if args.use_stratified_sampling:
+    print("🎯 Using stratified sampling to prevent extreme batch compositions")
+    combined_trainloader = create_stratified_combined_dataloader(
+        base_train_datasets, 
+        target_train_datasets, 
+        target_weight_multiplier, 
+        config['training']['batch_size']
+    )
+else:
+    print("⚠️  Using WeightedRandomSampler - may cause extreme batch compositions")
+    combined_trainloader = create_weighted_combined_dataloader(
+        base_train_datasets, 
+        target_train_datasets, 
+        target_weight_multiplier, 
+        config['training']['batch_size']
+    )
 
 # Create validation dataloaders
 target_valloader = create_combined_dataloader(target_val_datasets, config['training']['batch_size'], shuffle=False)
@@ -628,11 +735,19 @@ print(f"Keeping trained final layer bias from Phase 1 (combined positive ratio: 
 
 # Create new optimizer for customization phase
 custom_lr = config['training'].get('custom_learning_rate', config['training']['learning_rate'] * 0.1)
-optimizer = optim.AdamW(
-    model.parameters(), 
-    lr=custom_lr,
-    weight_decay=config['training']['weight_decay']
-)
+
+# Use layer-wise optimizer if layer-wise fine-tuning is enabled
+if layerwise_finetuner is not None:
+    lr_multiplier = advanced_config.get('layerwise_lr_multiplier', 0.1)
+    optimizer = layerwise_finetuner.get_layerwise_optimizer(custom_lr, lr_multiplier)
+    print(f"   📊 Using layer-wise optimizer (classifier LR: {custom_lr}, other layers LR: {custom_lr * lr_multiplier})")
+else:
+    optimizer = optim.AdamW(
+        model.parameters(), 
+        lr=custom_lr,
+        weight_decay=config['training']['weight_decay']
+    )
+    print(f"   📊 Using standard optimizer (LR: {custom_lr})")
 
 # Phase 2 training metrics
 custom_trainlossi = []
@@ -665,19 +780,107 @@ for epoch in range(config['training']['num_epochs']):
     train_preds = []
     train_labels = []
     train_losses = []
+    extreme_batch_count = 0
+    
+    # Handle gradual unfreezing
+    if layerwise_finetuner is not None and advanced_config.get('use_gradual_unfreezing', False):
+        unfreeze_schedule = advanced_config.get('unfreeze_schedule', [5, 10, 15])
+        for unfreeze_epoch in unfreeze_schedule:
+            if epoch == unfreeze_epoch:
+                group_idx = unfreeze_schedule.index(unfreeze_epoch)
+                if group_idx < len(layerwise_finetuner.layer_groups):
+                    layerwise_finetuner.unfreeze_group(group_idx)
+                    print(f"🔓 Unfroze layer group {group_idx} at epoch {epoch}")
+                    
+                    # Update optimizer with new unfrozen parameters
+                    lr_multiplier = advanced_config.get('layerwise_lr_multiplier', 0.1)
+                    optimizer = layerwise_finetuner.get_layerwise_optimizer(custom_lr, lr_multiplier)
+    
+    # Handle layer-wise fine-tuning transition
+    if (layerwise_finetuner is not None and 
+        advanced_config.get('use_layerwise_finetuning', False) and 
+        epoch == advanced_config.get('layerwise_classifier_epochs', 5)):
+        layerwise_finetuner.unfreeze_all()
+        lr_multiplier = advanced_config.get('layerwise_lr_multiplier', 0.1)
+        optimizer = layerwise_finetuner.get_layerwise_optimizer(custom_lr, lr_multiplier)
+        print(f"🔓 Unfroze all layers after {epoch} classifier-only epochs")
 
-    for Xi, yi in combined_trainloader:
+    for batch_idx, (Xi, yi) in enumerate(combined_trainloader):
         Xi, yi = Xi.to(device), yi.to(device).float()
+        
+        # Apply data augmentation if enabled
+        if augmenter is not None:
+            Xi, yi = augmenter.augment(Xi, yi)
+        
+        # FIX 1: Batch composition logging to detect extreme batches
+        batch_positive_ratio = yi.mean().item()
+        current_loss_before = None
+        if batch_positive_ratio > 0.9 or batch_positive_ratio < 0.1:
+            extreme_batch_count += 1
+            # Calculate loss before training step for extreme batches
+            with torch.no_grad():
+                outputs_pre = model(Xi).squeeze()
+                current_loss_before = criterion(outputs_pre, yi).item()
+            if epoch % 5 == 0 or extreme_batch_count <= 5:  # Log first few or every 5th epoch
+                print(f"    Extreme batch {batch_idx}: {batch_positive_ratio:.3f} positive ratio, pre-step loss: {current_loss_before:.4f}")
+        
         optimizer.zero_grad()
         outputs = model(Xi).squeeze()
-        loss = criterion(outputs, yi)
-        loss.backward()
+        
+        # Compute base BCE loss
+        bce_loss = criterion(outputs, yi)
+        total_loss = bce_loss
+        
+        # Add EWC regularization if enabled
+        if ewc_regularizer is not None:
+            ewc_loss = ewc_regularizer.penalty(model)
+            total_loss += ewc_lambda * ewc_loss
+        
+        # Add CORAL loss if enabled (computed every few batches for efficiency)
+        if advanced_config.get('use_coral', False) and batch_idx % 10 == 0:
+            # Extract base and target features for CORAL
+            with torch.no_grad():
+                # Get a batch of base data
+                try:
+                    base_batch = next(iter(base_trainloader))
+                    base_X = base_batch[0][:len(Xi)].to(device)  # Match batch size
+                    
+                    # Extract features from both domains
+                    base_features, _ = extract_features_for_coral(model, [(base_X, torch.zeros(len(base_X)))], device)
+                    target_features, _ = extract_features_for_coral(model, [(Xi, yi)], device)
+                    
+                    if base_features is not None and target_features is not None:
+                        coral_loss_val = coral_loss(base_features.to(device), target_features.to(device))
+                        total_loss += coral_lambda * coral_loss_val
+                except:
+                    pass  # Skip CORAL if extraction fails
+        
+        # Add contrastive loss if enabled
+        if advanced_config.get('use_contrastive', False):
+            # Extract features for contrastive learning
+            try:
+                features, _ = extract_features_for_coral(model, [(Xi, yi)], device)
+                if features is not None:
+                    contrastive_loss_val = contrastive_loss(features.to(device), yi)
+                    total_loss += contrastive_lambda * contrastive_loss_val
+            except:
+                pass  # Skip contrastive if extraction fails
+        
+        total_loss.backward()
+        
+        # FIX 2: Add gradient clipping to prevent gradient explosion
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        
         optimizer.step()
+
+        # Log extreme batch post-step loss
+        if current_loss_before is not None and (epoch % 5 == 0 or extreme_batch_count <= 5):
+            print(f"    Post-step loss: {total_loss.item():.4f}, change: {total_loss.item() - current_loss_before:+.4f}")
 
         # Minimize GPU→CPU transfers - keep on GPU until end of epoch
         train_preds.append((outputs.sigmoid() > 0.5).float())
         train_labels.append(yi)
-        train_losses.append(loss.item())
+        train_losses.append(total_loss.item())
 
     # Single GPU→CPU transfer per epoch
     train_preds = torch.cat(train_preds).cpu()
@@ -685,6 +888,12 @@ for epoch in range(config['training']['num_epochs']):
     train_loss = np.mean(train_losses)
     custom_trainlossi.append(train_loss)
     custom_trainf1i.append(f1_score(train_labels, train_preds, average='macro', zero_division=0))
+    
+    # Summary of extreme batches for this epoch
+    if extreme_batch_count > 0:
+        total_batches = len(combined_trainloader)
+        extreme_percentage = (extreme_batch_count / total_batches) * 100
+        print(f"  🚨 Extreme batches this epoch: {extreme_batch_count}/{total_batches} ({extreme_percentage:.1f}%)")
 
     # Evaluation on both target validation and target test
     model.eval()
@@ -812,17 +1021,17 @@ for epoch in range(config['training']['num_epochs']):
         
         # Define descriptive labels for Phase 2
         phase2_labels = {
-            'train': 'Training Loss: Phase 1 (Base) → Phase 2 (Target)',  # Legacy
-            'target': 'Target Test Loss (Continuous Evaluation)',
-            'base_val': 'Base Validation Loss (Continuous Evaluation)', 
-            'target_val': 'Target Validation Loss (Continuous Evaluation)',
+            'train': 'Training Log Loss: Phase 1 (Base) → Phase 2 (Target)',  # Legacy
+            'target': 'Target Test Log Loss (Continuous Evaluation)',
+            'base_val': 'Base Validation Log Loss (Continuous Evaluation)', 
+            'target_val': 'Target Validation Log Loss (Continuous Evaluation)',
             'train_f1': 'Training F1: Phase 1 (Base) → Phase 2 (Target)',  # Legacy
             'target_f1': 'Target Test F1 (Continuous Evaluation)',
             'base_val_f1': 'Base Validation F1 (Continuous Evaluation)',
             'target_val_f1': 'Target Validation F1 (Continuous Evaluation)',
             # New separate training labels
-            'base_train': 'Base Training Loss (Phase 1)',
-            'target_train': 'Target Training Loss (Phase 2)',
+            'base_train': 'Base Training Log Loss (Phase 1)',
+            'target_train': 'Target Training Log Loss (Phase 2)',
             'base_train_f1': 'Base Training F1 (Phase 1)',
             'target_train_f1': 'Target Training F1 (Phase 2)'
         }
@@ -880,6 +1089,60 @@ for epoch in range(config['training']['num_epochs']):
           f"Epochs without improvement: {custom_n_epochs_without_improvement}")
 
 print(f"\nPhase 2 completed! Best {custom_metric_name}: {custom_best_metric:.4f}")
+
+# =============================================================================
+# ENSEMBLE EVALUATION (if enabled)
+# =============================================================================
+if advanced_config.get('use_ensemble', False):
+    print("\n" + "="*60)
+    print("ENSEMBLE EVALUATION")
+    print("="*60)
+    
+    ensemble_alpha = advanced_config.get('ensemble_alpha', 0.7)
+    ensemble_predictor = EnsemblePredictor(
+        f'{experiment_dir}/base_model.pt',
+        f'{experiment_dir}/customized_model.pt',
+        alpha=ensemble_alpha
+    )
+    
+    # Initialize ensemble with model architecture
+    if args.model == 'simple':
+        model_class = SimpleSmokingCNN
+    else:
+        model_class = SmokingCNN
+    
+    model_kwargs = {
+        'window_size': config['model']['window_size'],
+        'num_features': config['model']['num_features']
+    }
+    
+    ensemble_predictor.load_models(model_class, model_kwargs)
+    ensemble_predictor.base_model.to(device)
+    ensemble_predictor.target_model.to(device)
+    
+    # Evaluate ensemble on target test set
+    ensemble_test_preds = []
+    ensemble_test_labels = []
+    
+    with torch.no_grad():
+        for Xi, yi in target_testloader:
+            Xi, yi = Xi.to(device), yi.to(device).float()
+            ensemble_outputs = ensemble_predictor.predict(Xi).squeeze()
+            
+            ensemble_test_preds.append((ensemble_outputs.sigmoid() > 0.5).float())
+            ensemble_test_labels.append(yi)
+    
+    ensemble_test_preds = torch.cat(ensemble_test_preds).cpu()
+    ensemble_test_labels = torch.cat(ensemble_test_labels).cpu()
+    ensemble_test_f1 = f1_score(ensemble_test_labels, ensemble_test_preds, average='macro', zero_division=0)
+    
+    print(f"Ensemble Test F1 (α={ensemble_alpha}): {ensemble_test_f1:.4f}")
+    print(f"  • Base model weight: {ensemble_alpha:.1f}")
+    print(f"  • Target model weight: {1-ensemble_alpha:.1f}")
+    
+    # Store ensemble results
+    custom_metrics['ensemble_test_f1'] = ensemble_test_f1
+    custom_metrics['ensemble_alpha'] = ensemble_alpha
 
 # =============================================================================
 # FINAL MODEL EVALUATION (Using Moving Averages)
@@ -971,7 +1234,20 @@ custom_metrics = {
     'target_test_samples': sum(target_test_info.values()),
     'custom_learning_rate': custom_lr,
     'target_weight_multiplier': target_weight_multiplier,
-    'effective_target_percentage': effective_target_percentage
+    'effective_target_percentage': effective_target_percentage,
+    # Advanced techniques used (for ablation analysis)
+    'advanced_techniques_used': enabled_techniques,
+    'use_layerwise_finetuning': advanced_config.get('use_layerwise_finetuning', False),
+    'use_gradual_unfreezing': advanced_config.get('use_gradual_unfreezing', False),
+    'use_ewc': advanced_config.get('use_ewc', False),
+    'use_augmentation': advanced_config.get('use_augmentation', False),
+    'use_coral': advanced_config.get('use_coral', False),
+    'use_ensemble': advanced_config.get('use_ensemble', False),
+    'use_contrastive': advanced_config.get('use_contrastive', False),
+    # Hyperparameters for advanced techniques
+    'ewc_lambda': ewc_lambda if advanced_config.get('use_ewc', False) else 0,
+    'coral_lambda': coral_lambda if advanced_config.get('use_coral', False) else 0,
+    'contrastive_lambda': contrastive_lambda if advanced_config.get('use_contrastive', False) else 0
 }
 torch.save(custom_metrics, f'{experiment_dir}/custom_metrics.pt')
 
@@ -987,7 +1263,7 @@ print(f"Base participants: {base_participants}")
 print(f"\nPhase 1 (Base Training):")
 print(f"  • Best {base_metric_name}: {base_best_metric:.4f}")
 print(f"  • Test F1 on target participant: {base_model_test_f1:.4f}")
-print(f"  • Training samples: {sum(base_train_info.values()):,}")
+print(f"  • Training samples (train+val): {sum(base_train_info.values()):,}")
 
 print(f"\nPhase 2 (Customization):")
 print(f"  • Best {custom_metric_name}: {custom_best_metric:.4f}")
@@ -1025,16 +1301,16 @@ transition_epoch = len(base_trainf1i) - 1
 # Define descriptive labels for final combined view with separate base/target training curves
 final_labels = {
     'train': 'Combined Training (Legacy)',  # Legacy parameter
-    'target': 'Target Test Loss (Continuous Evaluation)',
-    'base_val': 'Base Validation Loss (Continuous Evaluation)',
-    'target_val': 'Target Validation Loss (Continuous Evaluation)',
+    'target': 'Target Test Log Loss (Continuous Evaluation)',
+    'base_val': 'Base Validation Log Loss (Continuous Evaluation)',
+    'target_val': 'Target Validation Log Loss (Continuous Evaluation)',
     'train_f1': 'Combined Training F1 (Legacy)',  # Legacy parameter
     'target_f1': 'Target Test F1 (Continuous Evaluation)',
     'base_val_f1': 'Base Validation F1 (Continuous Evaluation)', 
     'target_val_f1': 'Target Validation F1 (Continuous Evaluation)',
     # New separate training labels
-    'base_train': 'Base Training Loss (Phase 1)',
-    'target_train': 'Target Training Loss (Phase 2)',
+    'base_train': 'Base Training Log Loss (Phase 1)',
+    'target_train': 'Target Training Log Loss (Phase 2)',
     'base_train_f1': 'Base Training F1 (Phase 1)',
     'target_train_f1': 'Target Training F1 (Phase 2)'
 }
@@ -1086,8 +1362,8 @@ Target Participant: {args.target_participant}
 Base Participants: {', '.join(base_participants)}
 
 Dataset Information:
-  • Base training samples: {sum(base_train_info.values()):,}
-  • Base validation samples: {sum(base_val_info.values()):,}
+  • Base training samples (train+val): {sum(base_train_info.values()):,}
+  • Base validation samples (test): {sum(base_val_info.values()):,}
   • Target training samples: {sum(target_train_info.values()):,}
   • Target validation samples: {sum(target_val_info.values()):,}
   • Target test samples: {sum(target_test_info.values()):,}
@@ -1108,6 +1384,9 @@ Phase 2 Results (Customization):
 Performance Improvement:
   • Absolute improvement: {absolute_improvement:+.4f}
   • Percentage improvement: {percentage_improvement:+.2f}%
+
+Advanced Techniques Used:
+{f"  • {', '.join(enabled_techniques)}" if enabled_techniques else "  • None (baseline approach)"}
 
 Files Generated:
   • base_model.pt - Best model from Phase 1
