@@ -2,7 +2,7 @@ import os
 import argparse
 import torch
 from sklearn.model_selection import train_test_split
-from utils import (
+from lib.utils import (
     load_config,
     get_experiment_dir,
     make_windowed_dataset_from_sessions,
