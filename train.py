@@ -1,30 +1,41 @@
 import os
+from sympy import hyper
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset, ConcatDataset
 
 from lib.utils_simple import *
 import argparse
+import json
+from time import time
 
 argparser = argparse.ArgumentParser()
 argparser.add_argument('--fold', type=int, required=True, help='Fold index for leave-one-participant-out cross-validation')
 argparser.add_argument('--device', type=int, required=True, default=0, help='GPU device index')
-argparser.add_argument('-b','--batch_size', type=int, required=True, default=32, help='batch size')
+argparser.add_argument('-b','--batch_size', type=int, required=True, default=64, help='batch size')
 args = argparser.parse_args()
 
-fold = args.fold
-device = f'cuda:{args.device}'
-batch_size = args.batch_size
+hyperparameters = {
+    'fold': args.fold,
+    'device':f'cuda:{args.device}',
+    'lr': 3e-4,
+    'batch_size': args.batch_size,
+    'early_stopping_patience': 40,
+    'early_stopping_patience_target': 40,
+    'window_size': 3000,
+    'participants': ['alsaad','anam','asfik','ejaz','iftakhar','tonmoy','unk1','dennis'],
+    'experiment_prefix': 'alpha',
+    'target_participant': None,  # to be set later
+    'data_path': 'data/001_test'
+    }
 
-# Hyperparameters
-lr = 3e-4
-early_stopping_patience = 40
-early_stopping_patience_target = 40
-window_size = 3000
-data_path = f'data/001_test'
-participants = ['alsaad','anam','asfik','ejaz','iftakhar','tonmoy','unk1','dennis']
-experiment_prefix = 'alpha'
-####
+fold = hyperparameters['fold']
+device = hyperparameters['device']
+batch_size = hyperparameters['batch_size']
+window_size = hyperparameters['window_size']
+experiment_prefix = hyperparameters['experiment_prefix']
+data_path = hyperparameters['data_path']
+participants = hyperparameters['participants']
 target_participant = participants[fold]
 
 new_exp_dir = create_and_get_new_exp_dir(prefix=experiment_prefix)
@@ -37,33 +48,35 @@ target_train_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participa
 target_val_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_val.pt'))
 target_test_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_test.pt'))
 
+trainloader = DataLoader(base_train_dataset, batch_size=batch_size, shuffle=True)
 base_valloader = DataLoader(base_val_dataset, batch_size=batch_size)
 target_trainloader = DataLoader(target_train_dataset, batch_size=batch_size)
 target_valloader = DataLoader(target_val_dataset, batch_size=batch_size)
 
-# Print dataset sizes
 print(f'Base train dataset size: {len(base_train_dataset)}')
 print(f'Base val dataset size: {len(base_val_dataset)}')
 print(f'Target train dataset size: {len(target_train_dataset)}')
 print(f'Target val dataset size: {len(target_val_dataset)}')
 print(f'Target test dataset size: {len(target_test_dataset)}')
 
-from lib.utils import SmokingCNN
-model = SmokingCNN(window_size=window_size, num_features=6)
+from lib.utils import SimpleSmokingCNN
+model = SimpleSmokingCNN(window_size=window_size, num_features=6)
 criterion = nn.BCEWithLogitsLoss()
-optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+optimizer = torch.optim.AdamW(model.parameters(), lr=hyperparameters['lr'])
 
-# Metrics
+print(f'Total model parameters: {sum(p.numel() for p in model.parameters())}')
+
 metrics = {
     'transition_epoch': None,
     'best_base_val_loss': None,
     'best_base_val_loss_epoch': None,
     'best_target_val_loss_epoch': None,
     'best_target_val_loss_epoch': None,
+    'best_base_val_f1': None,
+    'best_base_val_f1_epoch': None,
+    'best_target_val_f1': None,
+    'best_target_val_f1_epoch': None,
 }
-best_val_loss = float('inf')
-patience_counter = 0
-phase = 'base'
 
 lossi = {
     'base train loss': [],
@@ -76,11 +89,11 @@ lossi = {
     'target val f1': [],
 }
 
-trainloader = DataLoader(base_train_dataset, batch_size=batch_size, shuffle=True)
 model.to(device)
 epoch = 0
-
-from time import time
+best_val_loss = float('inf')
+patience_counter = 0
+phase = 'base'
 
 while True:
     start_time = time()
@@ -111,26 +124,39 @@ while True:
     else:
         patience_counter += 1
 
-    if patience_counter >= early_stopping_patience:
+    if lossi[f'{phase} val f1'][-1] > (metrics[f'best_{phase}_val_f1'] or 0):
+        metrics[f'best_{phase}_val_f1'] = lossi[f'{phase} val f1'][-1]
+        metrics[f'best_{phase}_val_f1_epoch'] = epoch
+
+    if patience_counter >= hyperparameters['early_stopping_patience' if phase == 'base' else 'early_stopping_patience_target']:
         if phase == 'base':
-            print("Switching to target phase")
             torch.save(model.state_dict(), f'{new_exp_dir}/last_{phase}_model.pt')
             phase = 'target'
             trainloader = DataLoader(ConcatDataset([base_train_dataset, target_train_dataset]), batch_size=batch_size, shuffle=True)
             best_val_loss = float('inf')
             patience_counter = 0
-            early_stopping_patience = early_stopping_patience_target
+            
             metrics['transition_epoch'] = epoch
+            metrics['best_target_val_loss_from_best_base_model'] = lossi['target val loss'][metrics['best_base_val_loss_epoch']]
+            metrics['best_target_val_f1_from_best_base_model'] = lossi['target val f1'][metrics['best_base_val_loss_epoch']]
         else:
-            print("Early stopping triggered")
             torch.save(model.state_dict(), f'{new_exp_dir}/last_{phase}_model.pt')
+            metrics['customization_improvement_in_val_loss'] = metrics['best_target_val_f1'] - metrics['best_target_val_f1_from_best_base_model']
+            metrics['customization_improvement_in_val_f1'] = metrics['best_target_val_f1'] - metrics['best_target_val_f1_from_best_base_model']
+
+            with open(f'{new_exp_dir}/metrics.json', 'w') as f:
+                json.dump(metrics, f, indent=4)
+            with open(f'{new_exp_dir}/losses.json', 'w') as f:
+                json.dump(lossi, f, indent=4)
+            with open(f'{new_exp_dir}/hyperparameters.json', 'w') as f:
+                json.dump(hyperparameters, f, indent=4)
             break
 
     plt.figure(figsize=(7.2,4.48))
     plt.plot(lossi['base train loss'], label='Train Loss (base)', color='b')
     plt.plot(lossi['base val loss'], label='Val Loss (base)', color='b', linestyle='--')
-    plt.plot(lossi['target train loss'], label='Train Loss (base)', color='g')
-    plt.plot(lossi[f'target val loss'], label='Val Loss (target)', color='g', linestyle='--')
+    plt.plot(lossi['target train loss'], label='Train Loss (target)', color='g')
+    plt.plot(lossi['target val loss'], label='Val Loss (target)', color='g', linestyle='--')
 
     if metrics['transition_epoch'] is not None:
         plt.axvline(x=metrics['transition_epoch'], color='r', linestyle='--', label='Phase Transition')
@@ -141,8 +167,8 @@ while True:
         plt.axhline(y=lossi['target val loss'][metrics['best_base_val_loss_epoch']], color='g', linestyle='--', label='Best Base Val Loss', alpha=0.5)
 
     if metrics['best_target_val_loss_epoch'] is not None and metrics['best_target_val_loss'] is not None:
-        plt.axhline(y=metrics['best_target_val_loss'], color='g', linestyle='--', label='Best target Val Loss', alpha=0.5)
-        plt.axvline(x=metrics['best_target_val_loss_epoch'], color='g', linestyle='--', alpha=0.5)
+        plt.axhline(y=metrics['best_target_val_loss'], color='g', linestyle='--', label='Best target Val Loss', alpha=0.8)
+        plt.axvline(x=metrics['best_target_val_loss_epoch'], color='g', linestyle='--', alpha=0.4)
 
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
@@ -157,9 +183,21 @@ while True:
     plt.plot(lossi['base val f1'], label='Val f1 (base)', color='b', linestyle='--')
     plt.plot(lossi['target train f1'], label='Train f1 (target)', color='r')
     plt.plot(lossi['target val f1'], label='Val f1 (target)', color='r', linestyle='--')
+
+    if metrics['transition_epoch'] is not None:
+        plt.axvline(x=metrics['transition_epoch'], color='r', linestyle='--', label='Phase Transition')
+
+    if metrics['best_base_val_f1_epoch'] is not None and metrics['best_base_val_f1'] is not None:
+        plt.axhline(y=metrics['best_base_val_f1'], color='b', linestyle='--', label='Best Base f1 Loss', alpha=0.5)
+        plt.axvline(x=metrics['best_base_val_f1_epoch'], color='b', linestyle='--', alpha=0.5)
+        plt.axhline(y=lossi['target val f1'][metrics['best_base_val_f1_epoch']], color='g', linestyle='--', label='Best Base Val Loss', alpha=0.5)
+
+    if metrics['best_target_val_f1_epoch'] is not None and metrics['best_target_val_f1'] is not None:
+        plt.axhline(y=metrics['best_target_val_f1'], color='g', linestyle='--', label='Best target f1 Loss', alpha=0.8)
+        plt.axvline(x=metrics['best_target_val_f1_epoch'], color='g', linestyle='--', alpha=0.4)
+
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
-    # plt.ylim([.7, 1])
     plt.legend()
     plt.title(f'Patience Counter: {patience_counter}')
     plt.savefig(f'{new_exp_dir}/f1.jpg', bbox_inches='tight')
@@ -167,3 +205,5 @@ while True:
 
     epoch += 1
     print(f'Epoch {epoch}, Phase: {phase}, Time Elapsed: {time() - start_time:.2f}s')
+
+
