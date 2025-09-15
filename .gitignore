@@ -4,3 +4,5 @@ experiments/
 results_analysis/
 __pycache__/
 *.pt
+*.csv
+*.png

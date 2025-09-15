@@ -68,13 +68,14 @@ training:
   
 # Participants Configuration
 participants:
-  - "tonmoy"
-  - "asfik"
-  - "ejaz"
-  - "alsaad"
-  - "anam"
-  - "iftakhar"
-  - "unk1"
+  # - "tonmoy"
+  # - "asfik"
+  # - "ejaz"
+  # - "alsaad"
+  # - "anam"
+  # - "iftakhar"
+  # - "unk1"
+  - "dennis"
 
 # Visualization Configuration
 visualization:

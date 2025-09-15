@@ -1,4 +1,0 @@
-Participant,Phase 1 Epoch,Phase 1 Metric,Phase 1 Test F1,Phase 2 Epoch,Phase 2 Metric,Phase 2 Test F1,Target Weight,Improvement
-tonmoy,1,N/A,0.5783,55,N/A,0.9098,1.0,+0.3315 (+57.32%)
-asfik,48,N/A,0.8797,78,N/A,0.9056,1.0,+0.0258 (+2.94%)
-ejaz,10,N/A,0.8987,46,N/A,0.9370,1.0,+0.0383 (+4.26%)

@@ -862,6 +862,7 @@ def evaluate(model, dataloader, device):
     y_pred = []
     y_true = []
     model.eval()
+    model.to(device)
     with torch.no_grad():
         for Xi,yi in dataloader:
             Xi = Xi.to(device)
