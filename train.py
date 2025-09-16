@@ -13,6 +13,8 @@ argparser = argparse.ArgumentParser()
 argparser.add_argument('--fold', type=int, required=True, help='Fold index for leave-one-participant-out cross-validation')
 argparser.add_argument('--device', type=int, required=True, default=0, help='GPU device index')
 argparser.add_argument('-b','--batch_size', type=int, required=True, default=64, help='batch size')
+argparser.add_argument('--model', type=str, default='medium', choices=['simple', 'medium', 'full'],
+                      help='Model architecture: simple (SimpleSmokingCNN), medium (MediumSmokingCNN), full (SmokingCNN)')
 args = argparser.parse_args()
 
 hyperparameters = {
@@ -26,7 +28,8 @@ hyperparameters = {
     'participants': ['alsaad','anam','asfik','ejaz','iftakhar','tonmoy','unk1','dennis'],
     'experiment_prefix': 'alpha',
     'target_participant': None,  # to be set later
-    'data_path': 'data/001_test'
+    'data_path': 'data/001_test',
+    'model_type': args.model
     }
 
 fold = hyperparameters['fold']
@@ -59,11 +62,21 @@ print(f'Target train dataset size: {len(target_train_dataset)}')
 print(f'Target val dataset size: {len(target_val_dataset)}')
 print(f'Target test dataset size: {len(target_test_dataset)}')
 
-from lib.utils import SimpleSmokingCNN
-model = SimpleSmokingCNN(window_size=window_size, num_features=6)
+from lib.utils import SimpleSmokingCNN, MediumSmokingCNN, SmokingCNN
+
+model_type = hyperparameters['model_type']
+if model_type == 'simple':
+    model = SimpleSmokingCNN(window_size=window_size, num_features=6)
+elif model_type == 'medium':
+    model = MediumSmokingCNN(window_size=window_size, num_features=6)
+elif model_type == 'full':
+    model = SmokingCNN(window_size=window_size, num_features=6)
+else:
+    raise ValueError(f"Invalid model type: {model_type}. Choose from 'simple', 'medium', 'full'")
 criterion = nn.BCEWithLogitsLoss()
 optimizer = torch.optim.AdamW(model.parameters(), lr=hyperparameters['lr'])
 
+print(f'Using {model_type} model: {model.__class__.__name__}')
 print(f'Total model parameters: {sum(p.numel() for p in model.parameters())}')
 
 metrics = {

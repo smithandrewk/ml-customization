@@ -984,34 +984,112 @@ class SmokingCNN(nn.Module):
         
         return x
 
-class SimpleSmokingCNN(nn.Module):
-    """Simple 3-layer CNN for fast training/testing."""
-    def __init__(self, window_size=3000, num_features=6):
-        super(SimpleSmokingCNN, self).__init__()
-        
-        self.conv1 = nn.Conv1d(num_features, 16, kernel_size=5, padding=2)
-        self.bn1 = nn.BatchNorm1d(16)
-        
-        self.conv2 = nn.Conv1d(16, 32, kernel_size=5, padding=2)
-        self.bn2 = nn.BatchNorm1d(32)
-        
-        self.conv3 = nn.Conv1d(32, 64, kernel_size=5, padding=2)
-        self.bn3 = nn.BatchNorm1d(64)
-        
-        self.global_pool = nn.AdaptiveAvgPool1d(1)
-        self.dropout = nn.Dropout(0.3)
-        self.classifier = nn.Linear(64, 1)
-    
+class SimpleResidualBlock(nn.Module):
+    """Lightweight residual block for MediumSmokingCNN."""
+    def __init__(self, in_channels, out_channels, kernel_size=5):
+        super(SimpleResidualBlock, self).__init__()
+
+        self.conv1 = nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=kernel_size//2)
+        self.bn1 = nn.BatchNorm1d(out_channels)
+
+        self.conv2 = nn.Conv1d(out_channels, out_channels, kernel_size=kernel_size, padding=kernel_size//2)
+        self.bn2 = nn.BatchNorm1d(out_channels)
+
+        # Skip connection
+        self.skip = None
+        if in_channels != out_channels:
+            self.skip = nn.Sequential(
+                nn.Conv1d(in_channels, out_channels, kernel_size=1),
+                nn.BatchNorm1d(out_channels)
+            )
+
     def forward(self, x):
-        x = relu(self.bn1(self.conv1(x)))
-        x = relu(self.bn2(self.conv2(x)))
-        x = relu(self.bn3(self.conv3(x)))
-        
+        identity = x
+
+        out = relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+
+        if self.skip is not None:
+            identity = self.skip(x)
+
+        out += identity
+        return relu(out)
+
+class MediumSmokingCNN(nn.Module):
+    """Medium complexity CNN with residual connections - balanced between Simple and full SmokingCNN."""
+    def __init__(self, window_size=3000, num_features=6):
+        super(MediumSmokingCNN, self).__init__()
+
+        # Initial convolution
+        self.stem = nn.Sequential(
+            nn.Conv1d(num_features, 32, kernel_size=7, padding=3),
+            nn.BatchNorm1d(32),
+            nn.ReLU(inplace=True)
+        )
+
+        # Residual blocks with increasing channels
+        self.layer1 = SimpleResidualBlock(32, 64, kernel_size=5)
+        self.pool1 = nn.MaxPool1d(kernel_size=2, stride=2)
+
+        self.layer2 = SimpleResidualBlock(64, 128, kernel_size=5)
+        self.pool2 = nn.MaxPool1d(kernel_size=2, stride=2)
+
+        self.layer3 = SimpleResidualBlock(128, 256, kernel_size=3)
+        self.pool3 = nn.MaxPool1d(kernel_size=2, stride=2)
+
+        # Global pooling and classifier
+        self.global_pool = nn.AdaptiveAvgPool1d(1)
+        self.dropout = nn.Dropout(0.4)
+        self.classifier = nn.Linear(256, 1)
+
+    def forward(self, x):
+        x = self.stem(x)
+
+        x = self.layer1(x)
+        x = self.pool1(x)
+
+        x = self.layer2(x)
+        x = self.pool2(x)
+
+        x = self.layer3(x)
+        x = self.pool3(x)
+
         x = self.global_pool(x)
         x = x.squeeze(-1)
         x = self.dropout(x)
         x = self.classifier(x)
-        
+
+        return x
+
+
+class SimpleSmokingCNN(nn.Module):
+    """Simple 3-layer CNN for fast training/testing."""
+    def __init__(self, window_size=3000, num_features=6):
+        super(SimpleSmokingCNN, self).__init__()
+
+        self.conv1 = nn.Conv1d(num_features, 16, kernel_size=5, padding=2)
+        self.bn1 = nn.BatchNorm1d(16)
+
+        self.conv2 = nn.Conv1d(16, 32, kernel_size=5, padding=2)
+        self.bn2 = nn.BatchNorm1d(32)
+
+        self.conv3 = nn.Conv1d(32, 64, kernel_size=5, padding=2)
+        self.bn3 = nn.BatchNorm1d(64)
+
+        self.global_pool = nn.AdaptiveAvgPool1d(1)
+        self.dropout = nn.Dropout(0.3)
+        self.classifier = nn.Linear(64, 1)
+
+    def forward(self, x):
+        x = relu(self.bn1(self.conv1(x)))
+        x = relu(self.bn2(self.conv2(x)))
+        x = relu(self.bn3(self.conv3(x)))
+
+        x = self.global_pool(x)
+        x = x.squeeze(-1)
+        x = self.dropout(x)
+        x = self.classifier(x)
+
         return x
 
 def calculate_positive_ratio(y_tensor):

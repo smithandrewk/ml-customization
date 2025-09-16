@@ -6,3 +6,5 @@ __pycache__/
 *.pt
 *.csv
 *.png
+*.jpg
+*.json
