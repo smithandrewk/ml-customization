@@ -15,6 +15,11 @@ argparser.add_argument('--device', type=int, required=True, default=0, help='GPU
 argparser.add_argument('-b','--batch_size', type=int, required=True, default=64, help='batch size')
 argparser.add_argument('--model', type=str, default='medium', choices=['simple', 'medium', 'full'],
                       help='Model architecture: simple (SimpleSmokingCNN), medium (MediumSmokingCNN), full (SmokingCNN)')
+argparser.add_argument('--use_augmentation', action='store_true', help='Enable data augmentation')
+argparser.add_argument('--jitter_std', type=float, default=0.005, help='Standard deviation for jitter noise')
+argparser.add_argument('--magnitude_range', type=float, nargs=2, default=[0.98, 1.02], help='Range for magnitude scaling')
+argparser.add_argument('--aug_prob', type=float, default=0.3, help='Probability of applying augmentation')
+argparser.add_argument('--prefix', type=str, default='alpha', help='Experiment prefix/directory name')
 args = argparser.parse_args()
 
 hyperparameters = {
@@ -26,10 +31,14 @@ hyperparameters = {
     'early_stopping_patience_target': 40,
     'window_size': 3000,
     'participants': ['alsaad','anam','asfik','ejaz','iftakhar','tonmoy','unk1','dennis'],
-    'experiment_prefix': 'alpha',
+    'experiment_prefix': args.prefix,
     'target_participant': None,  # to be set later
     'data_path': 'data/001_test',
-    'model_type': args.model
+    'model_type': args.model,
+    'use_augmentation': args.use_augmentation,
+    'jitter_std': args.jitter_std,
+    'magnitude_range': args.magnitude_range,
+    'aug_prob': args.aug_prob
     }
 
 fold = hyperparameters['fold']
@@ -62,7 +71,7 @@ print(f'Target train dataset size: {len(target_train_dataset)}')
 print(f'Target val dataset size: {len(target_val_dataset)}')
 print(f'Target test dataset size: {len(target_test_dataset)}')
 
-from lib.utils import SimpleSmokingCNN, MediumSmokingCNN, SmokingCNN
+from lib.utils import SimpleSmokingCNN, MediumSmokingCNN, SmokingCNN, calculate_receptive_field
 
 model_type = hyperparameters['model_type']
 if model_type == 'simple':
@@ -76,10 +85,24 @@ else:
 criterion = nn.BCEWithLogitsLoss()
 optimizer = torch.optim.AdamW(model.parameters(), lr=hyperparameters['lr'])
 
+receptive_field = calculate_receptive_field(model)
 print(f'Using {model_type} model: {model.__class__.__name__}')
 print(f'Total model parameters: {sum(p.numel() for p in model.parameters())}')
+print(f'Receptive field: {receptive_field} samples ({receptive_field/50:.1f}s at 50Hz)')
+
+augmenter = None
+if hyperparameters['use_augmentation']:
+    from lib.utils import TimeSeriesAugmenter
+    augmenter = TimeSeriesAugmenter({
+        'jitter_noise_std': hyperparameters['jitter_std'],
+        'magnitude_scale_range': hyperparameters['magnitude_range'],
+        'augmentation_probability': hyperparameters['aug_prob']
+    })
+    print(f'Data augmentation enabled: jitter_std={hyperparameters["jitter_std"]}, mag_range={hyperparameters["magnitude_range"]}, prob={hyperparameters["aug_prob"]}')
 
 metrics = {
+    'receptive_field': receptive_field,
+    'receptive_field_seconds': receptive_field / 50.0,
     'transition_epoch': None,
     'best_base_val_loss': None,
     'best_base_val_loss_epoch': None,
@@ -111,7 +134,7 @@ phase = 'base'
 while True:
     start_time = time()
     model.train()
-    train_loss, train_f1 = optimize_model_compute_loss_and_f1(model, trainloader, optimizer, criterion, device=device)
+    train_loss, train_f1 = optimize_model_compute_loss_and_f1(model, trainloader, optimizer, criterion, device=device, augmenter=augmenter)
 
     lossi['base train loss'].append(train_loss)
     lossi['base train f1'].append(train_f1)

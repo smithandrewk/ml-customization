@@ -11,6 +11,10 @@ import numpy as np
 from dotenv import load_dotenv
 from contextlib import contextmanager
 import yaml
+from sklearn.metrics import classification_report
+from sklearn.metrics import ConfusionMatrixDisplay
+from torch.nn.functional import relu
+import torch.nn as nn
 
 load_dotenv()
 
@@ -807,7 +811,6 @@ def get_sessions_for_project(project_name):
     
     return rows
     
-
 def get_verified_and_not_deleted_sessions(project_name, labeling):
     """
     Get sessions from the database for a specific project and labeling.
@@ -855,9 +858,6 @@ def get_participant_projects(participant_id):
         rows = cursor.fetchall()
     return [row[0] for row in rows]
 
-from sklearn.metrics import classification_report
-from sklearn.metrics import ConfusionMatrixDisplay
-
 def evaluate(model, dataloader, device):
     y_pred = []
     y_true = []
@@ -874,9 +874,6 @@ def evaluate(model, dataloader, device):
     print(classification_report(y_true, y_pred, target_names=['No Smoking', 'Smoking']))
     ConfusionMatrixDisplay.from_predictions(y_true, y_pred,normalize='true')
     ConfusionMatrixDisplay.from_predictions(y_true, y_pred,normalize='pred')
-
-from torch.nn.functional import relu
-import torch.nn as nn
 
 class ResidualBlock(nn.Module):
     """RegNet-style residual block with bottleneck design for 1D time series."""
@@ -1061,7 +1058,6 @@ class MediumSmokingCNN(nn.Module):
 
         return x
 
-
 class SimpleSmokingCNN(nn.Module):
     """Simple 3-layer CNN for fast training/testing."""
     def __init__(self, window_size=3000, num_features=6):
@@ -1091,6 +1087,91 @@ class SimpleSmokingCNN(nn.Module):
         x = self.classifier(x)
 
         return x
+
+def calculate_receptive_field(model):
+    """Calculate the theoretical receptive field of a CNN model.
+
+    Args:
+        model: PyTorch CNN model instance
+
+    Returns:
+        int: Theoretical receptive field size in samples
+    """
+    receptive_field = 1
+    jump = 1
+
+    # Define layer configurations for each model type
+    if isinstance(model, SimpleSmokingCNN):
+        # SimpleSmokingCNN: 3 conv layers, kernel_size=5, no pooling
+        layers = [
+            {'type': 'conv', 'kernel_size': 5, 'stride': 1},
+            {'type': 'conv', 'kernel_size': 5, 'stride': 1},
+            {'type': 'conv', 'kernel_size': 5, 'stride': 1}
+        ]
+
+    elif isinstance(model, MediumSmokingCNN):
+        # MediumSmokingCNN: stem + 3 residual blocks with pooling
+        layers = [
+            {'type': 'conv', 'kernel_size': 7, 'stride': 1},  # stem
+            {'type': 'conv', 'kernel_size': 5, 'stride': 1},  # layer1 (residual)
+            {'type': 'conv', 'kernel_size': 5, 'stride': 1},  # layer1 (residual)
+            {'type': 'pool', 'kernel_size': 2, 'stride': 2},  # pool1
+            {'type': 'conv', 'kernel_size': 5, 'stride': 1},  # layer2 (residual)
+            {'type': 'conv', 'kernel_size': 5, 'stride': 1},  # layer2 (residual)
+            {'type': 'pool', 'kernel_size': 2, 'stride': 2},  # pool2
+            {'type': 'conv', 'kernel_size': 3, 'stride': 1},  # layer3 (residual)
+            {'type': 'conv', 'kernel_size': 3, 'stride': 1},  # layer3 (residual)
+            {'type': 'pool', 'kernel_size': 2, 'stride': 2}   # pool3
+        ]
+
+    elif isinstance(model, SmokingCNN):
+        # SmokingCNN: stem + 4 stages with multiple residual blocks
+        layers = [
+            {'type': 'conv', 'kernel_size': 7, 'stride': 1},  # stem
+            # Stage 1: 2 residual blocks (kernel=7)
+            {'type': 'conv', 'kernel_size': 7, 'stride': 1},
+            {'type': 'conv', 'kernel_size': 7, 'stride': 1},
+            {'type': 'conv', 'kernel_size': 7, 'stride': 1},
+            {'type': 'conv', 'kernel_size': 7, 'stride': 1},
+            {'type': 'pool', 'kernel_size': 2, 'stride': 2},  # pool1
+            # Stage 2: 3 residual blocks (kernel=5)
+            {'type': 'conv', 'kernel_size': 5, 'stride': 1},
+            {'type': 'conv', 'kernel_size': 5, 'stride': 1},
+            {'type': 'conv', 'kernel_size': 5, 'stride': 1},
+            {'type': 'conv', 'kernel_size': 5, 'stride': 1},
+            {'type': 'conv', 'kernel_size': 5, 'stride': 1},
+            {'type': 'conv', 'kernel_size': 5, 'stride': 1},
+            {'type': 'pool', 'kernel_size': 2, 'stride': 2},  # pool2
+            # Stage 3: 3 residual blocks (kernel=5)
+            {'type': 'conv', 'kernel_size': 5, 'stride': 1},
+            {'type': 'conv', 'kernel_size': 5, 'stride': 1},
+            {'type': 'conv', 'kernel_size': 5, 'stride': 1},
+            {'type': 'conv', 'kernel_size': 5, 'stride': 1},
+            {'type': 'conv', 'kernel_size': 5, 'stride': 1},
+            {'type': 'conv', 'kernel_size': 5, 'stride': 1},
+            {'type': 'pool', 'kernel_size': 2, 'stride': 2},  # pool3
+            # Stage 4: 2 residual blocks (kernel=3)
+            {'type': 'conv', 'kernel_size': 3, 'stride': 1},
+            {'type': 'conv', 'kernel_size': 3, 'stride': 1},
+            {'type': 'conv', 'kernel_size': 3, 'stride': 1},
+            {'type': 'conv', 'kernel_size': 3, 'stride': 1}
+        ]
+
+    else:
+        # Unknown model type
+        return -1
+
+    # Calculate receptive field using the standard formula
+    for layer in layers:
+        if layer['type'] == 'conv':
+            # For convolution: RF = RF + (kernel_size - 1) * jump
+            receptive_field += (layer['kernel_size'] - 1) * jump
+        elif layer['type'] == 'pool':
+            # For pooling: RF = RF + (kernel_size - 1) * jump, jump = jump * stride
+            receptive_field += (layer['kernel_size'] - 1) * jump
+            jump *= layer['stride']
+
+    return receptive_field
 
 def calculate_positive_ratio(y_tensor):
     """Calculate the ratio of positive samples in the dataset."""

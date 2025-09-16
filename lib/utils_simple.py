@@ -7,17 +7,24 @@ from torch.nn.functional import relu
 import os
 
 def create_and_get_new_exp_dir(prefix='exp'):
-    # Create new directory in experiments named with an integer one more than the max integer in the directory padded with zeros on the left to 4 digits
+    # Create experiments directory if it doesn't exist
+    base_exp_dir = f'experiments/{prefix}'
+    os.makedirs(base_exp_dir, exist_ok=True)
+
+    # Find the highest existing experiment number in the prefix directory
     max_exp_num = 0
-    for dirname in os.listdir('experiments'):
-        if dirname.startswith(f'{prefix}_'):
-            try:
-                exp_num = int(dirname.split('_')[1])
-                max_exp_num = max(max_exp_num, exp_num)
-            except ValueError:
-                continue
+    if os.path.exists(base_exp_dir):
+        for dirname in os.listdir(base_exp_dir):
+            if os.path.isdir(os.path.join(base_exp_dir, dirname)):
+                try:
+                    exp_num = int(dirname)
+                    max_exp_num = max(max_exp_num, exp_num)
+                except ValueError:
+                    continue
+
+    # Create new experiment directory with zero-padded integer
     new_exp_num = max_exp_num + 1
-    new_exp_dir = f'experiments/{prefix}_{new_exp_num:04d}'
+    new_exp_dir = f'{base_exp_dir}/{new_exp_num:04d}'
     os.makedirs(new_exp_dir, exist_ok=True)
     return new_exp_dir
 
@@ -107,7 +114,7 @@ def optimize_model_and_compute_loss(model, dataloader, optimizer, criterion, dev
         return math.log(total_loss / count)
     return total_loss / count
 
-def optimize_model_compute_loss_and_f1(model, dataloader, optimizer, criterion, device):
+def optimize_model_compute_loss_and_f1(model, dataloader, optimizer, criterion, device, augmenter=None):
     model.train()
     total_loss = 0.0
     count = 0
@@ -116,6 +123,11 @@ def optimize_model_compute_loss_and_f1(model, dataloader, optimizer, criterion, 
     for Xi, yi in dataloader:
         Xi = Xi.to(device)
         yi = yi.to(device).float().view(-1,1)
+
+        # Apply augmentation if provided
+        if augmenter is not None:
+            Xi, yi = augmenter.augment(Xi, yi)
+
         optimizer.zero_grad()
         logits = model(Xi)
         loss = criterion(logits,yi)
