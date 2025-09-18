@@ -22,7 +22,7 @@ argparser.add_argument('--aug_prob', type=float, default=0.3, help='Probability 
 argparser.add_argument('--prefix', type=str, default='alpha', help='Experiment prefix/directory name')
 argparser.add_argument('--early_stopping_patience', type=int, default=40, help='Early stopping patience for base phase')
 argparser.add_argument('--early_stopping_patience_target', type=int, default=40, help='Early stopping patience for target phase')
-argparser.add_argument('--mode', type=str, default='full_fine_tuning', choices=['full_fine_tuning', 'last_layer_only'], help='Mode')
+argparser.add_argument('--mode', type=str, default='full_fine_tuning', choices=['full_fine_tuning', 'last_layer_only', 'generic', 'target_only'], help='Mode')
 args = argparser.parse_args()
 
 hyperparameters = {
@@ -56,10 +56,24 @@ target_participant = participants[fold]
 hyperparameters['target_participant'] = target_participant
 
 new_exp_dir = create_and_get_new_exp_dir(prefix=experiment_prefix)
-participants.remove(target_participant)
 
-base_train_dataset = ConcatDataset([TensorDataset(*torch.load(f'{data_path}/{p}_{s}.pt')) for p in participants for s in ['train', 'val']])
-base_val_dataset = ConcatDataset([TensorDataset(*torch.load(f'{data_path}/{p}_test.pt')) for p in participants])
+if hyperparameters['mode'] == 'generic':
+    print("Generic mode: using ALL participants including target in training data.")
+    # Keep all participants - don't remove target
+elif hyperparameters['mode'] == 'target_only':
+    print(f"Target-only mode: training only on {target_participant} data.")
+    participants = []  # Empty - no other participants
+else:
+    print(f"Leave-one-participant-out mode: using {target_participant} as target participant.")
+    participants.remove(target_participant)
+
+if participants:  # Not empty (generic or personalization modes)
+    base_train_dataset = ConcatDataset([TensorDataset(*torch.load(f'{data_path}/{p}_{s}.pt')) for p in participants for s in ['train', 'val']])
+    base_val_dataset = ConcatDataset([TensorDataset(*torch.load(f'{data_path}/{p}_test.pt')) for p in participants])
+else:  # target_only mode
+    # Use target data as "base" data (we'll only train on this)
+    base_train_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_train.pt'))
+    base_val_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_val.pt'))
 
 target_train_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_train.pt'))
 target_val_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_val.pt'))
@@ -171,7 +185,7 @@ while True:
         metrics[f'best_{phase}_val_f1_epoch'] = epoch
 
     if patience_counter >= hyperparameters['early_stopping_patience' if phase == 'base' else 'early_stopping_patience_target']:
-        if phase == 'base':
+        if phase == 'base' and hyperparameters['mode'] not in ['generic', 'target_only']:
             torch.save(model.state_dict(), f'{new_exp_dir}/last_{phase}_model.pt')
             phase = 'target'
             trainloader = DataLoader(ConcatDataset([base_train_dataset, target_train_dataset]), batch_size=batch_size, shuffle=True)
@@ -195,11 +209,9 @@ while True:
                     raise ValueError("Model does not have 'fc' or 'classifier' attribute for last layer fine-tuning.")
                 print("Fine-tuning only the last layer of the model.")
                 print(f'Trainable model parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}')
-
         else:
+            print("Early stopping triggered.")
             torch.save(model.state_dict(), f'{new_exp_dir}/last_{phase}_model.pt')
-            metrics['customization_improvement_in_val_loss'] = metrics['best_target_val_f1'] - metrics['best_target_val_f1_from_best_base_model']
-            metrics['customization_improvement_in_val_f1'] = metrics['best_target_val_f1'] - metrics['best_target_val_f1_from_best_base_model']
 
             with open(f'{new_exp_dir}/metrics.json', 'w') as f:
                 json.dump(metrics, f, indent=4)
