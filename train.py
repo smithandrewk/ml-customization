@@ -20,6 +20,9 @@ argparser.add_argument('--jitter_std', type=float, default=0.005, help='Standard
 argparser.add_argument('--magnitude_range', type=float, nargs=2, default=[0.98, 1.02], help='Range for magnitude scaling')
 argparser.add_argument('--aug_prob', type=float, default=0.3, help='Probability of applying augmentation')
 argparser.add_argument('--prefix', type=str, default='alpha', help='Experiment prefix/directory name')
+argparser.add_argument('--early_stopping_patience', type=int, default=40, help='Early stopping patience for base phase')
+argparser.add_argument('--early_stopping_patience_target', type=int, default=40, help='Early stopping patience for target phase')
+argparser.add_argument('--mode', type=str, default='full_fine_tuning', choices=['full_fine_tuning', 'last_layer_only'], help='Mode')
 args = argparser.parse_args()
 
 hyperparameters = {
@@ -27,18 +30,19 @@ hyperparameters = {
     'device':f'cuda:{args.device}',
     'lr': 3e-4,
     'batch_size': args.batch_size,
-    'early_stopping_patience': 40,
-    'early_stopping_patience_target': 40,
+    'early_stopping_patience': args.early_stopping_patience,
+    'early_stopping_patience_target': args.early_stopping_patience_target,
     'window_size': 3000,
     'participants': ['alsaad','anam','asfik','ejaz','iftakhar','tonmoy','unk1','dennis'],
-    'experiment_prefix': args.prefix,
+    'experiment_prefix': args.prefix + f'_{args.mode}',
     'target_participant': None,  # to be set later
     'data_path': 'data/001_test',
     'model_type': args.model,
     'use_augmentation': args.use_augmentation,
     'jitter_std': args.jitter_std,
     'magnitude_range': args.magnitude_range,
-    'aug_prob': args.aug_prob
+    'aug_prob': args.aug_prob,
+    'mode': args.mode
     }
 
 fold = hyperparameters['fold']
@@ -49,6 +53,7 @@ experiment_prefix = hyperparameters['experiment_prefix']
 data_path = hyperparameters['data_path']
 participants = hyperparameters['participants']
 target_participant = participants[fold]
+hyperparameters['target_participant'] = target_participant
 
 new_exp_dir = create_and_get_new_exp_dir(prefix=experiment_prefix)
 participants.remove(target_participant)
@@ -87,7 +92,6 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=hyperparameters['lr'])
 
 receptive_field = calculate_receptive_field(model)
 print(f'Using {model_type} model: {model.__class__.__name__}')
-print(f'Total model parameters: {sum(p.numel() for p in model.parameters())}')
 print(f'Receptive field: {receptive_field} samples ({receptive_field/50:.1f}s at 50Hz)')
 
 augmenter = None
@@ -99,6 +103,8 @@ if hyperparameters['use_augmentation']:
         'augmentation_probability': hyperparameters['aug_prob']
     })
     print(f'Data augmentation enabled: jitter_std={hyperparameters["jitter_std"]}, mag_range={hyperparameters["magnitude_range"]}, prob={hyperparameters["aug_prob"]}')
+
+print(f'Total model parameters: {sum(p.numel() for p in model.parameters())}')
 
 metrics = {
     'receptive_field': receptive_field,
@@ -175,6 +181,21 @@ while True:
             metrics['transition_epoch'] = epoch
             metrics['best_target_val_loss_from_best_base_model'] = lossi['target val loss'][metrics['best_base_val_loss_epoch']]
             metrics['best_target_val_f1_from_best_base_model'] = lossi['target val f1'][metrics['best_base_val_loss_epoch']]
+
+            if hyperparameters['mode'] == 'last_layer_only':
+                for param in model.parameters():
+                    param.requires_grad = False
+                if hasattr(model, 'fc'):
+                    for param in model.fc.parameters():
+                        param.requires_grad = True
+                elif hasattr(model, 'classifier'):
+                    for param in model.classifier.parameters():
+                        param.requires_grad = True
+                else:
+                    raise ValueError("Model does not have 'fc' or 'classifier' attribute for last layer fine-tuning.")
+                print("Fine-tuning only the last layer of the model.")
+                print(f'Trainable model parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}')
+
         else:
             torch.save(model.state_dict(), f'{new_exp_dir}/last_{phase}_model.pt')
             metrics['customization_improvement_in_val_loss'] = metrics['best_target_val_f1'] - metrics['best_target_val_f1_from_best_base_model']
@@ -217,8 +238,8 @@ while True:
     plt.figure(figsize=(7.2,4.48))
     plt.plot(lossi['base train f1'], label='Train f1 (base)', color='b')
     plt.plot(lossi['base val f1'], label='Val f1 (base)', color='b', linestyle='--')
-    plt.plot(lossi['target train f1'], label='Train f1 (target)', color='r')
-    plt.plot(lossi['target val f1'], label='Val f1 (target)', color='r', linestyle='--')
+    plt.plot(lossi['target train f1'], label='Train f1 (target)', color='g')
+    plt.plot(lossi['target val f1'], label='Val f1 (target)', color='g', linestyle='--')
 
     if metrics['transition_epoch'] is not None:
         plt.axvline(x=metrics['transition_epoch'], color='r', linestyle='--', label='Phase Transition')

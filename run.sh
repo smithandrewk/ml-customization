@@ -1,18 +1,16 @@
-#!/bin/bash
-source env/bin/activate
-
-start=${1:-0}
-end=${2:-7}
-device=${3:-0}
-prefix=${4:-augmented_medium}
-use_augmentation=${5:-true}
-
-for i in $(seq $start $end)
+batch_size=64
+patience=40
+for fold in {0..7}
 do
-  echo "Starting fold $i on device $device with prefix $prefix"
-  if [ "$use_augmentation" = true ] ; then
-    python3 train.py --fold $i --device $device -b 64 --model medium --use_augmentation --prefix $prefix
-  else
-    python3 train.py --fold $i --device $device -b 64 --model medium --prefix $prefix
-  fi
+    echo "Training fold $fold"
+    python3 train.py \
+        --fold $fold \
+        --device 0 \
+        --batch_size $batch_size \
+        --model simple \
+        --use_augmentation \
+        --prefix simple_b${batch_size}_aug_patience${patience} \
+        --early_stopping_patience $patience \
+        --early_stopping_patience_target $patience \
+        --mode last_layer_only
 done
