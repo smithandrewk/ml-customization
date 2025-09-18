@@ -7,6 +7,7 @@ batch_size=256
 patience=120  # Triple patience for most complex model
 model=full
 lr=5e-5  # Very reduced learning rate for full model
+device=${1:-0}  # Default to device 0 if not provided
 
 echo "🚀 FULL MODEL ABLATION - Optimized Training Strategy"
 echo "Model: $model | Batch: $batch_size | Patience: $patience | LR: 5e-5 (very conservative)"
@@ -22,7 +23,7 @@ do
 
     python3 train.py \
         --fold $fold \
-        --device 0 \
+        --device $device \
         --batch_size $batch_size \
         --model $model \
         --use_augmentation \

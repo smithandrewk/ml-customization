@@ -7,6 +7,7 @@ batch_size=256
 patience=80  # Doubled patience for more complex model
 model=medium
 lr=1e-4  # Reduced learning rate for medium model
+device=${1:-0}  # Default to device 0 if not provided
 
 echo "🚀 MEDIUM MODEL ABLATION - Optimized Training Strategy"
 echo "Model: $model | Batch: $batch_size | Patience: $patience | LR: 1e-4 (reduced)"
@@ -22,7 +23,7 @@ do
 
     python3 train.py \
         --fold $fold \
-        --device 0 \
+        --device $device \
         --batch_size $batch_size \
         --model $model \
         --use_augmentation \
