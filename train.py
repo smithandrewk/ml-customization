@@ -23,12 +23,13 @@ argparser.add_argument('--prefix', type=str, default='alpha', help='Experiment p
 argparser.add_argument('--early_stopping_patience', type=int, default=40, help='Early stopping patience for base phase')
 argparser.add_argument('--early_stopping_patience_target', type=int, default=40, help='Early stopping patience for target phase')
 argparser.add_argument('--mode', type=str, default='full_fine_tuning', choices=['full_fine_tuning', 'last_layer_only', 'generic', 'target_only'], help='Mode')
+argparser.add_argument('--lr', type=float, default=3e-4, help='Learning rate')
 args = argparser.parse_args()
 
 hyperparameters = {
     'fold': args.fold,
     'device':f'cuda:{args.device}',
-    'lr': 3e-4,
+    'lr': args.lr,
     'batch_size': args.batch_size,
     'early_stopping_patience': args.early_stopping_patience,
     'early_stopping_patience_target': args.early_stopping_patience_target,
