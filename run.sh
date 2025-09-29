@@ -1,8 +1,8 @@
 batch_size=512
-patience=5
+patience=40
 lr=3e-4
 mode="target_only" # 'full_fine_tuning', 'last_layer_only', 'generic', 'target_only'
-target_data_pct=0.25  # Percentage of target training data to use (0.25, 0.5, 0.75, 1.0)
+target_data_pct=0.05  # Percentage of target training data to use (0.25, 0.5, 0.75, 1.0)
 timestamp=$(date +%Y%m%d_%H%M%S)
 prefix="b${batch_size}_aug_patience${patience}_${mode}_pct${target_data_pct}_${timestamp}"
 

@@ -235,24 +235,41 @@ while True:
     model.train()
     train_loss, train_f1 = optimize_model_compute_loss_and_f1(model, trainloader, optimizer, criterion, device=device, augmenter=augmenter)
 
-    lossi['base train loss'].append(train_loss)
-    lossi['base train f1'].append(train_f1)
+    # In target_only mode, trainloader contains target data, so log to target train loss
+    if hyperparameters['mode'] == 'target_only':
+        lossi['target train loss'].append(train_loss)
+        lossi['target train f1'].append(train_f1)
+        lossi['base train loss'].append(float('nan'))  # No base training in target_only mode
+        lossi['base train f1'].append(float('nan'))
+    else:
+        lossi['base train loss'].append(train_loss)
+        lossi['base train f1'].append(train_f1)
+
+        # Only compute target train loss separately when not in target_only mode
+        loss,f1 = compute_loss_and_f1(model, target_trainloader, criterion, device=device)
+        lossi['target train loss'].append(loss)
+        lossi['target train f1'].append(f1)
 
     loss,f1 = compute_loss_and_f1(model, base_valloader, criterion, device=device)
-    lossi['base val loss'].append(loss)
-    lossi['base val f1'].append(f1)
-
-    loss,f1 = compute_loss_and_f1(model, target_trainloader, criterion, device=device)
-    lossi['target train loss'].append(loss)
-    lossi['target train f1'].append(f1)
+    # In target_only mode, base_valloader is actually target val data
+    if hyperparameters['mode'] == 'target_only':
+        lossi['base val loss'].append(float('nan'))
+        lossi['base val f1'].append(float('nan'))
+    else:
+        lossi['base val loss'].append(loss)
+        lossi['base val f1'].append(f1)
 
     loss,f1 = compute_loss_and_f1(model, target_valloader, criterion, device=device)
     lossi['target val loss'].append(loss)
     lossi['target val f1'].append(f1)
 
-    # For generic mode, use target val loss for early stopping; otherwise use phase-specific val loss
-    val_loss_key = 'target val loss' if hyperparameters['mode'] == 'generic' else f'{phase} val loss'
-    val_f1_key = 'target val f1' if hyperparameters['mode'] == 'generic' else f'{phase} val f1'
+    # For generic and target_only modes, use target val loss for early stopping; otherwise use phase-specific val loss
+    if hyperparameters['mode'] in ['generic', 'target_only']:
+        val_loss_key = 'target val loss'
+        val_f1_key = 'target val f1'
+    else:
+        val_loss_key = f'{phase} val loss'
+        val_f1_key = f'{phase} val f1'
 
     if lossi[val_loss_key][-1] < best_val_loss:
         best_val_loss = lossi[val_loss_key][-1]
