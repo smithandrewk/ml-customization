@@ -1,7 +1,7 @@
-batch_size=256
+batch_size=512
 patience=5
 lr=3e-4
-mode="full_fine_tuning"
+mode="target_only" # 'full_fine_tuning', 'last_layer_only', 'generic', 'target_only'
 timestamp=$(date +%Y%m%d_%H%M%S)
 prefix="b${batch_size}_aug_patience${patience}_${mode}_${timestamp}"
 

@@ -210,8 +210,6 @@ phase = 'base'
 while True:
     start_time = time()
     model.train()
-    if epoch >= 30 and phase == 'base':
-        patience_counter = 40
     train_loss, train_f1 = optimize_model_compute_loss_and_f1(model, trainloader, optimizer, criterion, device=device, augmenter=augmenter)
 
     lossi['base train loss'].append(train_loss)
