@@ -12,7 +12,7 @@ from time import time
 argparser = argparse.ArgumentParser()
 argparser.add_argument('--fold', type=int, required=True, help='Fold index for leave-one-participant-out cross-validation')
 argparser.add_argument('--device', type=int, required=True, default=0, help='GPU device index')
-argparser.add_argument('-b','--batch_size', type=int, required=True, default=64, help='batch size')
+argparser.add_argument('--batch_size', type=int, required=True, default=64, help='batch size')
 argparser.add_argument('--model', type=str, default='medium', choices=['simple', 'medium', 'full', 'test'],
                       help='Model architecture: simple (SimpleSmokingCNN), medium (MediumSmokingCNN), full (SmokingCNN)')
 argparser.add_argument('--use_augmentation', action='store_true', help='Enable data augmentation')
@@ -36,7 +36,7 @@ hyperparameters = {
     'window_size': 3000,
     'participants': ['tonmoy','asfik','ejaz'],
     # 'participants': ['tonmoy','alsaad','anam','asfik','ejaz','iftakhar','unk1','dennis'],
-    'experiment_prefix': args.prefix + f'_{args.mode}',
+    'experiment_prefix': args.prefix,
     'target_participant': None,  # to be set later
     'data_path': 'data/001_test',
     'model_type': args.model,
@@ -57,7 +57,9 @@ participants = hyperparameters['participants']
 target_participant = participants[fold]
 hyperparameters['target_participant'] = target_participant
 
-new_exp_dir = create_and_get_new_exp_dir(prefix=experiment_prefix)
+new_exp_dir = f'experiments/{experiment_prefix}/fold{fold}_{target_participant}'
+os.makedirs(new_exp_dir, exist_ok=False)
+# new_exp_dir = create_and_get_new_exp_dir(prefix=experiment_prefix)
 
 if hyperparameters['mode'] == 'generic':
     print("Generic mode: using ALL participants including target in training data.")
@@ -92,7 +94,7 @@ print(f'Target train dataset size: {len(target_train_dataset)}')
 print(f'Target val dataset size: {len(target_val_dataset)}')
 print(f'Target test dataset size: {len(target_test_dataset)}')
 
-from lib.utils import SimpleSmokingCNN, MediumSmokingCNN, SmokingCNN, calculate_receptive_field
+from lib.utils import SimpleSmokingCNN, MediumSmokingCNN, SmokingCNN
 
 model_type = hyperparameters['model_type']
 if model_type == 'simple':
@@ -142,9 +144,9 @@ elif model_type == 'test':
 
             self.blocks.append(Block(8,16,pool=False))
 
-            for _ in range(5):
-                self.blocks.append(Block(16,16))
-                self.blocks.append(Block(16,16,pool=False))
+            # for _ in range(5):
+            #     self.blocks.append(Block(16,16))
+            #     self.blocks.append(Block(16,16,pool=False))
                 
             self.blocks = nn.ModuleList(self.blocks)
             self.gap = nn.AdaptiveAvgPool1d(1)
@@ -162,10 +164,7 @@ else:
     raise ValueError(f"Invalid model type: {model_type}. Choose from 'simple', 'medium', 'full'")
 criterion = nn.BCEWithLogitsLoss()
 optimizer = torch.optim.AdamW(model.parameters(), lr=hyperparameters['lr'])
-
-receptive_field = calculate_receptive_field(model)
 print(f'Using {model_type} model: {model.__class__.__name__}')
-print(f'Receptive field: {receptive_field} samples ({receptive_field/50:.1f}s at 50Hz)')
 
 augmenter = None
 if hyperparameters['use_augmentation']:
@@ -180,8 +179,6 @@ if hyperparameters['use_augmentation']:
 print(f'Total model parameters: {sum(p.numel() for p in model.parameters())}')
 
 metrics = {
-    'receptive_field': receptive_field,
-    'receptive_field_seconds': receptive_field / 50.0,
     'transition_epoch': None,
     'best_base_val_loss': None,
     'best_base_val_loss_epoch': None,
@@ -338,6 +335,4 @@ while True:
     plt.close()
 
     epoch += 1
-    print(f'Epoch {epoch}, Phase: {phase}, Time Elapsed: {time() - start_time:.2f}s')
-
-
+    print(f'Epoch {epoch}, Phase: {phase}, Time Elapsed: {time() - start_time:.2f}s, Patience Counter: {patience_counter}, Train Loss: {train_loss:.4f}, Train F1: {train_f1:.4f}, Val Loss: {lossi[val_loss_key][-1]:.4f}, Val F1: {lossi[val_f1_key][-1]:.4f}')
