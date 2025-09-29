@@ -6,11 +6,6 @@ import seaborn as sns
 from scipy import stats
 import argparse
 
-# Parse command line arguments
-parser = argparse.ArgumentParser(description='Generate Figure 2: Main Results - Performance Improvements')
-parser.add_argument('--experiment', type=str, help='Specific experiment directory to plot (e.g., alpha). If not specified, plots all experiments separately.')
-args = parser.parse_args()
-
 # Set Nature-style publication parameters
 plt.rcParams.update({
     'font.size': 9,
@@ -39,27 +34,29 @@ colors = {
     'accent': '#ff7f0e'     # Orange accent
 }
 
+# Parse command line arguments
+parser = argparse.ArgumentParser(description='Generate Figure 2 from experiment data')
+parser.add_argument('--experiment', type=str, help='Specific experiment directory to plot (e.g., alpha). If not specified, plots all experiments separately.')
+args = parser.parse_args()
+
 # Load experiment data
 if args.experiment:
+    # Plot specific experiment
     if os.path.isdir(f'experiments/{args.experiment}'):
         experiments = [args.experiment]
         print(f"Plotting specific experiment: {args.experiment}")
     else:
         print(f"Error: Experiment directory 'experiments/{args.experiment}' not found")
-        if os.path.exists('experiments'):
-            print(f"Available experiments: {', '.join(os.listdir('experiments'))}")
+        print(f"Available experiments: {', '.join(os.listdir('experiments'))}")
         exit(1)
 else:
-    if os.path.exists('experiments'):
-        experiments = [d for d in os.listdir('experiments') if os.path.isdir(f'experiments/{d}')]
-        print(f"Plotting each experiment separately: {experiments}")
-    else:
-        print("No experiments directory found")
-        exit(1)
+    # Plot all experiments separately
+    experiments = [d for d in os.listdir('experiments') if os.path.isdir(f'experiments/{d}')]
+    print(f"Plotting each experiment separately: {experiments}")
 
 # Process each experiment separately
 for experiment in experiments:
-    print(f'\\n=== Processing experiment: {experiment} ===')
+    print(f'\n=== Processing experiment: {experiment} ===')
     data = []
     experiment_dir = f'experiments/{experiment}'
 
@@ -133,7 +130,7 @@ for experiment in experiments:
     for d in data:
         print(f'  Fold {d["fold"]} ({d["participant"]}): Base F1: {d["base_f1"]:.4f}, Target F1: {d["target_f1"]:.4f}, Improvement: {d["improvement"]:.4f} ({d["relative_improvement"]:.1f}%)')
 
-    # Create four-panel figure for main results
+    # Create Nature-style figure
     fig, axes = plt.subplots(2, 2, figsize=(7.2, 6.8))  # Nature single column width
     fig.patch.set_facecolor('white')
 
@@ -147,10 +144,8 @@ for experiment in experiments:
                     widths=0.6, medianprops=dict(color='white', linewidth=1.5))
     bp['boxes'][0].set_facecolor(colors['base'])
     bp['boxes'][0].set_alpha(0.8)
-    bp['boxes'][0].set_edgecolor(colors['base'])
     bp['boxes'][1].set_facecolor(colors['target'])
     bp['boxes'][1].set_alpha(0.8)
-    bp['boxes'][1].set_edgecolor(colors['target'])
 
     # Style whiskers and caps
     for whisker in bp['whiskers']:
@@ -160,12 +155,6 @@ for experiment in experiments:
         cap.set_color(colors['neutral'])
         cap.set_linewidth(1)
 
-    # Add individual data points
-    x_base = np.random.normal(1, 0.04, len(base_f1s))
-    x_target = np.random.normal(2, 0.04, len(target_f1s))
-    ax1.scatter(x_base, base_f1s, alpha=0.7, s=25, color=colors['base'], edgecolors='white', linewidths=0.5)
-    ax1.scatter(x_target, target_f1s, alpha=0.7, s=25, color=colors['target'], edgecolors='white', linewidths=0.5)
-
     # Add statistical test
     t_stat, p_value = stats.ttest_rel(target_f1s, base_f1s)
     if p_value < 0.001:
@@ -173,133 +162,159 @@ for experiment in experiments:
     else:
         p_text = f'P = {p_value:.3f}'
 
-    # Calculate Cohen's d for paired samples
-    improvements = [target - base for target, base in zip(target_f1s, base_f1s)]
-    cohens_d = np.mean(improvements) / np.std(improvements, ddof=1)
-
-    ax1.text(0.98, 0.98, f'{p_text}\\\\nCohen\\'s d = {cohens_d:.2f}',
-             transform=ax1.transAxes, ha='right', va='top',
+    ax1.text(0.98, 0.98, p_text, transform=ax1.transAxes, ha='right', va='top',
              fontweight='bold', fontsize=8)
 
     ax1.set_ylabel('F1 score', fontweight='bold')
     ax1.set_title('a', fontweight='bold', fontsize=12, loc='left', pad=10)
     ax1.grid(True, alpha=0.2, linewidth=0.5)
     ax1.set_ylim(0.0, 1.0)
+    ax1.spines['top'].set_visible(False)
+    ax1.spines['right'].set_visible(False)
 
-    # Panel B: Per-participant improvement bar chart
+    # Panel B: Scatter plot of improvement vs base performance
     ax2 = axes[0, 1]
-    participant_labels = [f'P{d["fold"]}' for d in data]
     improvements = [d['improvement'] for d in data]
+    point_colors = [colors['improve'] if imp > 0 else colors['target'] for imp in improvements]
 
-    # Color bars by improvement direction
-    bar_colors = [colors['improve'] if imp > 0 else colors['target'] for imp in improvements]
+    scatter = ax2.scatter(base_f1s, improvements, c=point_colors, alpha=0.8, s=40,
+                         edgecolors='white', linewidths=0.5)
 
-    bars = ax2.bar(range(len(participant_labels)), improvements,
-                   color=bar_colors, alpha=0.8, edgecolor='white', linewidth=0.5)
+    # Add correlation
+    correlation = np.corrcoef(base_f1s, improvements)[0, 1]
+    ax2.text(0.02, 0.98, f'r = {correlation:.3f}', transform=ax2.transAxes,
+             fontweight='bold', fontsize=8, ha='left', va='top')
 
     # Add horizontal line at y=0
     ax2.axhline(y=0, color=colors['neutral'], linestyle='-', alpha=0.5, linewidth=1)
 
-    # Add value labels on bars
-    for bar, imp in zip(bars, improvements):
-        height = bar.get_height()
-        ax2.text(bar.get_x() + bar.get_width()/2., height + (0.005 if height > 0 else -0.01),
-                f'{imp:.3f}', ha='center', va='bottom' if height > 0 else 'top', fontsize=7)
-
-    ax2.set_xlabel('Participant', fontweight='bold')
-    ax2.set_ylabel('Improvement (ΔF1)', fontweight='bold')
-    ax2.set_title('b', fontweight='bold', fontsize=12, loc='left', pad=10)
-    ax2.set_xticks(range(len(participant_labels)))
-    ax2.set_xticklabels(participant_labels, fontsize=8)
-    ax2.grid(True, alpha=0.2, axis='y', linewidth=0.5)
-
-    # Panel C: Baseline performance vs improvement potential
-    ax3 = axes[1, 0]
-
-    # Color points based on improvement direction
-    point_colors = [colors['improve'] if imp > 0 else colors['target'] for imp in improvements]
-
-    scatter = ax3.scatter(base_f1s, improvements, c=point_colors, alpha=0.8, s=40,
-                         edgecolors='white', linewidths=0.5)
-
-    # Add correlation analysis
-    correlation = np.corrcoef(base_f1s, improvements)[0, 1]
-    from scipy.stats import pearsonr
-    r, p_corr = pearsonr(base_f1s, improvements)
-
-    # Add trend line if correlation is significant
-    if p_corr < 0.05:
-        z = np.polyfit(base_f1s, improvements, 1)
-        p = np.poly1d(z)
-        x_trend = np.linspace(min(base_f1s), max(base_f1s), 100)
-        ax3.plot(x_trend, p(x_trend), color=colors['neutral'], linestyle='-', alpha=0.8, linewidth=1)
-
-    # Add horizontal line at y=0
-    ax3.axhline(y=0, color=colors['neutral'], linestyle='--', alpha=0.7, linewidth=1)
-
-    # Add participant labels
+    # Add participant labels (smaller, cleaner)
     for i, d in enumerate(data):
-        ax3.annotate(f'P{d["fold"]}', (base_f1s[i], improvements[i]),
+        ax2.annotate(f'P{d["fold"]}', (base_f1s[i], improvements[i]),
                     xytext=(3, 3), textcoords='offset points', fontsize=6,
                     alpha=0.7, color=colors['neutral'])
 
-    # Add correlation statistics
-    if p_corr < 0.001:
-        p_corr_text = 'P < 0.001'
-    else:
-        p_corr_text = f'P = {p_corr:.3f}'
+    ax2.set_xlabel('Base F1 score', fontweight='bold')
+    ax2.set_ylabel('Improvement (ΔF1)', fontweight='bold')
+    ax2.set_title('b', fontweight='bold', fontsize=12, loc='left', pad=10)
+    ax2.grid(True, alpha=0.2, linewidth=0.5)
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
 
-    ax3.text(0.02, 0.98, f'r = {correlation:.3f}\\\\n{p_corr_text}',
-             transform=ax3.transAxes, ha='left', va='top', fontweight='bold', fontsize=8)
+    # Panel C: Bar chart for per-participant results
+    ax3 = axes[1, 0]
+    participant_labels = [f'P{d["fold"]}' for d in data]
+    x_pos = np.arange(len(participant_labels))
 
-    ax3.set_xlabel('Baseline F1 score', fontweight='bold')
-    ax3.set_ylabel('Improvement (ΔF1)', fontweight='bold')
+    # Create grouped bar chart
+    width = 0.35
+    bars1 = ax3.bar(x_pos - width/2, base_f1s, width, label='Base',
+                    color=colors['base'], alpha=0.8, edgecolor='white', linewidth=0.5)
+    bars2 = ax3.bar(x_pos + width/2, target_f1s, width, label='Customized',
+                    color=colors['target'], alpha=0.8, edgecolor='white', linewidth=0.5)
+
+    ax3.set_xlabel('Participant', fontweight='bold')
+    ax3.set_ylabel('F1 score', fontweight='bold')
     ax3.set_title('c', fontweight='bold', fontsize=12, loc='left', pad=10)
-    ax3.grid(True, alpha=0.2, linewidth=0.5)
+    ax3.set_xticks(x_pos)
+    ax3.set_xticklabels(participant_labels, rotation=45, ha='right', fontsize=7)
+    ax3.legend(frameon=False, loc='upper left', fontsize=7)
+    ax3.grid(True, alpha=0.2, axis='y', linewidth=0.5)
+    ax3.set_ylim(0, 1.0)
+    ax3.spines['top'].set_visible(False)
+    ax3.spines['right'].set_visible(False)
 
-    # Panel D: Effect size analysis and success rate
+    # Subplot 4: Training dynamics visualization - aligned by transition
     ax4 = axes[1, 1]
 
-    # Create effect size visualization
-    positive_improvements = [imp for imp in improvements if imp > 0]
-    negative_improvements = [imp for imp in improvements if imp <= 0]
+    # Align curves by transition epoch - show full range
+    min_transition = min(d['transition_epoch'] for d in data)
+    max_epochs_after_transition = max(len(d['losses']['target val loss']) - d['transition_epoch'] for d in data)
 
-    # Success rate pie chart
-    success_rate = len(positive_improvements) / len(improvements) * 100
-    sizes = [success_rate, 100 - success_rate]
-    labels = [f'Improved\\\\n({len(positive_improvements)}/8)', f'No improvement\\\\n({len(negative_improvements)}/8)']
-    colors_pie = [colors['improve'], colors['neutral']]
+    # Go from beginning (0) to end of longest experiment
+    pre_transition_epochs = min_transition  # epochs before transition (go to beginning)
+    post_transition_epochs = max_epochs_after_transition - 1  # epochs after transition (go to end)
+    relative_epochs = range(-pre_transition_epochs, post_transition_epochs + 1)
 
-    wedges, texts, autotexts = ax4.pie(sizes, labels=labels, colors=colors_pie, autopct='%1.1f%%',
-                                      startangle=90, textprops={'fontsize': 8})
+    # Collect aligned curves
+    aligned_curves = []
+    for d in data:
+        transition = d['transition_epoch']
+        target_loss = d['losses']['target val loss']
 
-    # Add summary statistics
-    mean_improvement = np.mean(improvements)
-    median_improvement = np.median(improvements)
+        aligned_curve = []
+        for rel_epoch in relative_epochs:
+            abs_epoch = transition + rel_epoch
+            if 0 <= abs_epoch < len(target_loss):
+                aligned_curve.append(target_loss[abs_epoch])
+            else:
+                aligned_curve.append(np.nan)
+        aligned_curves.append(aligned_curve)
 
-    ax4.text(0.02, -1.3, f'Mean Δ: {mean_improvement:.3f}\\\\nMedian Δ: {median_improvement:.3f}\\\\nCohen\\'s d: {cohens_d:.2f}',
-             transform=ax4.transAxes, ha='left', va='top', fontweight='bold', fontsize=8,
-             bbox=dict(boxstyle="round,pad=0.3", facecolor='white', alpha=0.8, edgecolor='gray'))
+    # Calculate average and std for each relative epoch, but stop when only 1 participant left
+    avg_aligned = []
+    std_aligned = []
+    for i in range(len(relative_epochs)):
+        values = [curve[i] for curve in aligned_curves if not np.isnan(curve[i])]
+        if len(values) > 2:  # Only include if more than 1 participant
+            avg_aligned.append(np.mean(values))
+            std_aligned.append(np.std(values))
+        else:
+            # Stop here - don't include single participant tail
+            break
 
+    # Plot individual aligned curves (only up to where we have the average)
+    plot_length = len(avg_aligned)
+    plot_epochs = relative_epochs[:plot_length]
+
+    # Plot individual curves (subtle)
+    for curve in aligned_curves:
+        curve_subset = curve[:plot_length]
+        valid_epochs = [epoch for epoch, val in zip(plot_epochs, curve_subset) if not np.isnan(val)]
+        valid_vals = [val for val in curve_subset if not np.isnan(val)]
+        ax4.plot(valid_epochs, valid_vals, color=colors['neutral'], alpha=0.2, linewidth=0.5)
+
+    # Plot average curve
+    valid_epochs = plot_epochs
+    valid_avg = avg_aligned
+    valid_std = std_aligned
+
+    ax4.plot(valid_epochs, valid_avg, color=colors['base'], linewidth=2, label='Mean loss')
+
+    # Add confidence interval
+    if len(data) > 2:
+        ax4.fill_between(valid_epochs,
+                        np.array(valid_avg) - np.array(valid_std),
+                        np.array(valid_avg) + np.array(valid_std),
+                        alpha=0.2, color=colors['base'])
+
+    # Mark transition point
+    ax4.axvline(x=0, color=colors['target'], linestyle='--', linewidth=1.5, alpha=0.8,
+               label='Customization')
+
+    ax4.set_xlabel('Epochs relative to transition', fontweight='bold')
+    ax4.set_ylabel('Target validation loss', fontweight='bold')
     ax4.set_title('d', fontweight='bold', fontsize=12, loc='left', pad=10)
+    ax4.legend(frameon=False, loc='upper right', fontsize=7)
+    ax4.grid(True, alpha=0.2, linewidth=0.5)
+    ax4.spines['top'].set_visible(False)
+    ax4.spines['right'].set_visible(False)
 
-    # Adjust layout
+    # Adjust layout with proper spacing for Nature style
     plt.tight_layout(pad=1.0, h_pad=1.5, w_pad=1.5)
 
     # Print summary statistics
-    print(f'\\\\n=== Summary Statistics for {experiment} ===')
+    print(f'\\n=== Summary Statistics for {experiment} ===')
     print(f'Mean base F1: {np.mean(base_f1s):.4f} ± {np.std(base_f1s):.4f}')
     print(f'Mean customized F1: {np.mean(target_f1s):.4f} ± {np.std(target_f1s):.4f}')
     print(f'Mean improvement: {np.mean(improvements):.4f} ± {np.std(improvements):.4f}')
-    print(f'Success rate: {success_rate:.1f}% ({len(positive_improvements)}/{len(improvements)})')
-    print(f'Effect size (Cohen\\'s d): {cohens_d:.3f}')
-    print(f'Statistical significance: {p_text}')
+    print(f'Relative improvement: {np.mean([d["relative_improvement"] for d in data]):.1f}% ± {np.std([d["relative_improvement"] for d in data]):.1f}%')
+    print(f'Participants with improvement: {sum(1 for imp in improvements if imp > 0)}/{len(improvements)}')
 
     # Save figure with experiment-specific filename
-    os.makedirs('figures', exist_ok=True)
     filename = f'figures/figure2_{experiment}.jpg'
     plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white')
-    print(f'\\\\nFigure saved as {filename}')
+    print(f'\\nFigure saved as {filename}')
 
     if args.experiment:
         # Only show plot if specific experiment requested
@@ -308,4 +323,4 @@ for experiment in experiments:
         # Close figure to avoid memory issues when processing multiple experiments
         plt.close()
 
-print("\\\\nProcessing complete!")
+print("\\nProcessing complete!")

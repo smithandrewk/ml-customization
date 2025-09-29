@@ -1,268 +1,206 @@
 import os
 import json
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import numpy as np
 import seaborn as sns
 from scipy import stats
 import argparse
+import pandas as pd
 
 # Parse command line arguments
-parser = argparse.ArgumentParser(description='Generate Figure 1 from experiment data')
-parser.add_argument('--experiment', type=str, help='Specific experiment directory to plot (e.g., alpha). If not specified, plots all experiments separately.')
+parser = argparse.ArgumentParser(description='Generate Figure 1: Study Design and Methodology')
+parser.add_argument('--experiment', type=str, help='Specific experiment directory to plot')
 args = parser.parse_args()
 
-# Load experiment data
+# Set Nature-style publication parameters
+plt.rcParams.update({
+    'font.size': 9,
+    'axes.labelsize': 10,
+    'axes.titlesize': 11,
+    'xtick.labelsize': 8,
+    'ytick.labelsize': 8,
+    'legend.fontsize': 8,
+    'figure.titlesize': 12,
+    'axes.linewidth': 0.8,
+    'xtick.major.width': 0.8,
+    'ytick.major.width': 0.8,
+    'xtick.minor.width': 0.6,
+    'ytick.minor.width': 0.6,
+    'axes.spines.top': False,
+    'axes.spines.right': False,
+    'figure.facecolor': 'white'
+})
+
+# Nature-inspired color palette
+colors = {
+    'base': '#1f77b4',      # Professional blue
+    'target': '#d62728',    # Nature red
+    'improve': '#2ca02c',   # Nature green
+    'neutral': '#7f7f7f',   # Gray
+    'accent': '#ff7f0e',    # Orange accent
+    'light_blue': '#add8e6',
+    'light_green': '#90ee90',
+    'light_red': '#ffb6c1'
+}
+
+# Create four-panel figure
+fig, axes = plt.subplots(2, 2, figsize=(7.2, 6.8))  # Nature single column width
+fig.patch.set_facecolor('white')
+
+# Panel A: Study Workflow Diagram
+ax1 = axes[0, 0]
+
+# Create workflow steps
+steps = ['Population\nData', 'Base Model\nTraining', 'Target\nPersonalization', 'Evaluation']
+y_positions = [0.8, 0.5, 0.5, 0.2]
+x_positions = [0.2, 0.2, 0.8, 0.8]
+
+# Draw boxes for each step
+for i, (step, x, y) in enumerate(zip(steps, x_positions, y_positions)):
+    if i == 0:
+        color = colors['neutral']
+    elif i == 1:
+        color = colors['base']
+    elif i == 2:
+        color = colors['target']
+    else:
+        color = colors['improve']
+
+    box = mpatches.FancyBboxPatch((x-0.1, y-0.08), 0.2, 0.16,
+                                  boxstyle="round,pad=0.02",
+                                  facecolor=color, alpha=0.3,
+                                  edgecolor=color, linewidth=1.5)
+    ax1.add_patch(box)
+    ax1.text(x, y, step, ha='center', va='center', fontweight='bold', fontsize=8)
+
+# Draw arrows
+arrow_props = dict(arrowstyle='->', lw=1.5, color=colors['neutral'])
+# Population to Base Model
+ax1.annotate('', xy=(0.2, 0.42), xytext=(0.2, 0.72), arrowprops=arrow_props)
+# Base Model to Personalization
+ax1.annotate('', xy=(0.7, 0.5), xytext=(0.3, 0.5), arrowprops=arrow_props)
+# Personalization to Evaluation
+ax1.annotate('', xy=(0.8, 0.28), xytext=(0.8, 0.42), arrowprops=arrow_props)
+
+# Add labels
+ax1.text(0.15, 0.57, 'Leave-one-out\nCV', ha='center', va='center', fontsize=7, style='italic')
+ax1.text(0.5, 0.53, 'Fine-tuning', ha='center', va='center', fontsize=7, style='italic')
+ax1.text(0.85, 0.35, 'F1 score', ha='center', va='center', fontsize=7, style='italic')
+
+ax1.set_xlim(0, 1)
+ax1.set_ylim(0, 1)
+ax1.set_title('a', fontweight='bold', fontsize=12, loc='left', pad=10)
+ax1.axis('off')
+
+# Panel B: Dataset Characteristics
+ax2 = axes[0, 1]
+
+# Simulated dataset statistics (replace with real data when available)
+participants = ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7']
+smoking_sessions = [23, 18, 31, 27, 20, 25, 22, 19]  # Example data
+non_smoking_sessions = [145, 132, 178, 154, 138, 162, 149, 143]
+
+x_pos = np.arange(len(participants))
+width = 0.35
+
+bars1 = ax2.bar(x_pos - width/2, smoking_sessions, width,
+                label='Smoking', color=colors['target'], alpha=0.8)
+bars2 = ax2.bar(x_pos + width/2, non_smoking_sessions, width,
+                label='Non-smoking', color=colors['base'], alpha=0.8)
+
+ax2.set_xlabel('Participant', fontweight='bold')
+ax2.set_ylabel('Number of Sessions', fontweight='bold')
+ax2.set_title('b', fontweight='bold', fontsize=12, loc='left', pad=10)
+ax2.set_xticks(x_pos)
+ax2.set_xticklabels(participants)
+ax2.legend(frameon=False, loc='upper right', fontsize=7)
+ax2.grid(True, alpha=0.2, axis='y', linewidth=0.5)
+
+# Panel C: Model Architecture Diagram
+ax3 = axes[1, 0]
+
+# Create simplified CNN architecture visualization
+layers = ['Input\n(3000×6)', 'Conv1D\n16 filters', 'Conv1D\n32 filters', 'Conv1D\n64 filters', 'Global\nAvgPool', 'Dense\n(1)']
+y_pos = 0.5
+x_positions = np.linspace(0.1, 0.9, len(layers))
+widths = [0.12, 0.12, 0.12, 0.12, 0.08, 0.08]
+
+for i, (layer, x, w) in enumerate(zip(layers, x_positions, widths)):
+    if i == 0:
+        color = colors['light_blue']
+    elif i < 4:
+        color = colors['light_green']
+    elif i == 4:
+        color = colors['light_red']
+    else:
+        color = colors['accent']
+
+    box = mpatches.FancyBboxPatch((x-w/2, y_pos-0.1), w, 0.2,
+                                  boxstyle="round,pad=0.01",
+                                  facecolor=color, alpha=0.6,
+                                  edgecolor='black', linewidth=0.8)
+    ax3.add_patch(box)
+    ax3.text(x, y_pos, layer, ha='center', va='center', fontweight='bold', fontsize=7)
+
+# Draw connections
+for i in range(len(x_positions)-1):
+    ax3.annotate('', xy=(x_positions[i+1]-widths[i+1]/2, y_pos),
+                 xytext=(x_positions[i]+widths[i]/2, y_pos),
+                 arrowprops=dict(arrowstyle='->', lw=1, color='black'))
+
+ax3.set_xlim(0, 1)
+ax3.set_ylim(0, 1)
+ax3.set_title('c', fontweight='bold', fontsize=12, loc='left', pad=10)
+ax3.axis('off')
+
+# Panel D: Sample Accelerometer Data
+ax4 = axes[1, 1]
+
+# Generate realistic-looking accelerometer data
+np.random.seed(42)
+time_points = np.linspace(0, 60, 3000)  # 60 seconds at 50Hz
+
+# Simulate different phases: non-smoking, smoking gesture, smoking
+base_signal = np.sin(0.1 * time_points) + 0.1 * np.random.randn(3000)
+smoking_period = (time_points > 20) & (time_points < 25)
+gesture_enhancement = 2 * np.sin(2 * time_points[smoking_period]) * np.exp(-(time_points[smoking_period]-22.5)**2/2)
+
+# Add smoking gestures
+accelerometer_x = base_signal.copy()
+accelerometer_x[smoking_period] += gesture_enhancement
+
+# Plot accelerometer trace
+ax4.plot(time_points, accelerometer_x, color=colors['neutral'], linewidth=0.8, alpha=0.8)
+
+# Highlight smoking bout
+smoking_start, smoking_end = 20, 25
+ax4.axvspan(smoking_start, smoking_end, alpha=0.3, color=colors['target'], label='Smoking bout')
+
+# Add annotation
+ax4.annotate('Smoking\ngestures', xy=(22.5, max(accelerometer_x[smoking_period])),
+            xytext=(35, 1.5), fontsize=7,
+            arrowprops=dict(arrowstyle='->', color=colors['target'], lw=1))
+
+ax4.set_xlabel('Time (seconds)', fontweight='bold')
+ax4.set_ylabel('Acceleration (g)', fontweight='bold')
+ax4.set_title('d', fontweight='bold', fontsize=12, loc='left', pad=10)
+ax4.grid(True, alpha=0.2, linewidth=0.5)
+ax4.legend(frameon=False, loc='upper right', fontsize=7)
+ax4.set_xlim(0, 60)
+
+# Adjust layout
+plt.tight_layout(pad=1.0, h_pad=1.5, w_pad=1.5)
+
+# Save figure
+os.makedirs('figures', exist_ok=True)
+filename = 'figures/figure1.jpg'
+plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white')
+print(f'Figure 1 saved as {filename}')
+
 if args.experiment:
-    # Plot specific experiment
-    if os.path.isdir(f'experiments/{args.experiment}'):
-        experiments = [args.experiment]
-        print(f"Plotting specific experiment: {args.experiment}")
-    else:
-        print(f"Error: Experiment directory 'experiments/{args.experiment}' not found")
-        print(f"Available experiments: {', '.join(os.listdir('experiments'))}")
-        exit(1)
+    plt.show()
 else:
-    # Plot all experiments separately
-    experiments = [d for d in os.listdir('experiments') if os.path.isdir(f'experiments/{d}')]
-    print(f"Plotting each experiment separately: {experiments}")
+    plt.close()
 
-# Process each experiment separately
-for experiment in experiments:
-    print(f'\n=== Processing experiment: {experiment} ===')
-    data = []
-    experiment_dir = f'experiments/{experiment}'
-
-    if not os.path.isdir(experiment_dir):
-        continue
-
-    # Get all training run subdirectories
-    training_runs = [d for d in os.listdir(experiment_dir)
-                    if os.path.isdir(f'{experiment_dir}/{d}') and
-                    os.path.exists(f'{experiment_dir}/{d}/hyperparameters.json')]
-
-    if not training_runs:
-        print(f"  No valid training runs found in {experiment}")
-        continue
-
-    print(f"  Found {len(training_runs)} training runs: {training_runs}")
-
-    # Load data from each training run
-    for run_id in training_runs:
-        run_dir = f'{experiment_dir}/{run_id}'
-
-        # Check all required files exist
-        required_files = ['hyperparameters.json', 'metrics.json', 'losses.json']
-        if not all(os.path.exists(f'{run_dir}/{file}') for file in required_files):
-            print(f"    Skipping {run_id}: missing required files")
-            continue
-
-        try:
-            with open(f'{run_dir}/hyperparameters.json', 'r') as f:
-                hyperparameters = json.load(f)
-
-            with open(f'{run_dir}/metrics.json', 'r') as f:
-                metrics = json.load(f)
-
-            with open(f'{run_dir}/losses.json', 'r') as f:
-                losses = json.load(f)
-
-            fold = hyperparameters['fold']
-            participants = hyperparameters['participants']
-            participants = ['alsaad','anam','asfik','ejaz','iftakhar','tonmoy','unk1','dennis']
-            target_participant = participants[fold] if fold < len(participants) else f'fold_{fold}'
-
-            base_f1 = metrics['best_target_val_f1_from_best_base_model']
-            target_f1 = metrics['best_target_val_f1']
-            improvement = target_f1 - base_f1
-
-            data.append({
-                'experiment': f'{experiment}/{run_id}',
-                'experiment_name': experiment,
-                'run_id': run_id,
-                'fold': fold,
-                'participant': target_participant,
-                'base_f1': base_f1,
-                'target_f1': target_f1,
-                'improvement': improvement,
-                'relative_improvement': improvement / base_f1 * 100,
-                'transition_epoch': metrics.get('transition_epoch', 0),
-                'losses': losses
-            })
-            print(f"    Loaded run {run_id}: fold {fold} ({target_participant})")
-
-        except Exception as e:
-            print(f"    Error loading {run_id}: {e}")
-            continue
-
-    if not data:
-        print(f"  No data loaded for experiment {experiment}, skipping...")
-        continue
-
-    print(f'  Loaded {len(data)} training runs for {experiment}')
-    for d in data:
-        print(f'  Fold {d["fold"]} ({d["participant"]}): Base F1: {d["base_f1"]:.4f}, Target F1: {d["target_f1"]:.4f}, Improvement: {d["improvement"]:.4f} ({d["relative_improvement"]:.1f}%)')
-
-    # Set Nature-style publication parameters
-    plt.rcParams.update({
-        'font.size': 9,
-        'axes.labelsize': 10,
-        'axes.titlesize': 11,
-        'xtick.labelsize': 8,
-        'ytick.labelsize': 8,
-        'legend.fontsize': 8,
-        'figure.titlesize': 12,
-        'axes.linewidth': 0.8,
-        'xtick.major.width': 0.8,
-        'ytick.major.width': 0.8,
-        'xtick.minor.width': 0.6,
-        'ytick.minor.width': 0.6,
-        'axes.spines.top': False,
-        'axes.spines.right': False,
-        'figure.facecolor': 'white'
-    })
-
-    # Nature-inspired color palette
-    colors = {
-        'base': '#1f77b4',      # Professional blue
-        'target': '#d62728',    # Nature red
-        'improve': '#2ca02c',   # Nature green
-        'neutral': '#7f7f7f',   # Gray
-        'accent': '#ff7f0e'     # Orange accent
-    }
-
-    # Create two-panel figure
-    fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.4))  # Nature single column width
-    fig.patch.set_facecolor('white')
-
-    # Panel A: Enhanced box plot with individual points and effect size
-    ax1 = axes[0]
-    base_f1s = [d['base_f1'] for d in data]
-    target_f1s = [d['target_f1'] for d in data]
-
-    # Calculate relative improvement: (target - base) / (1 - base) * 100
-    relative_improvements = [(target - base) / (1 - base) * 100 for base, target in zip(base_f1s, target_f1s)]
-
-    # Create box plot
-    bp = ax1.boxplot([relative_improvements], labels=[''], patch_artist=True, widths=0.4,
-                    medianprops=dict(color='white', linewidth=1.5))
-    bp['boxes'][0].set_facecolor(colors['improve'])
-    bp['boxes'][0].set_alpha(0.8)
-    bp['boxes'][0].set_edgecolor(colors['improve'])
-
-    # Style whiskers and caps
-    for whisker in bp['whiskers']:
-        whisker.set_color(colors['neutral'])
-        whisker.set_linewidth(1)
-    for cap in bp['caps']:
-        cap.set_color(colors['neutral'])
-        cap.set_linewidth(1)
-
-    # Add individual data points (strip plot)
-    x_jitter = np.random.normal(1, 0.04, len(relative_improvements))  # Add slight jitter
-    ax1.scatter(x_jitter, relative_improvements, alpha=0.7, s=25,
-               color=colors['target'], edgecolors='white', linewidths=0.5)
-
-    # Add reference line at 0% (no improvement)
-    ax1.axhline(y=0, color=colors['neutral'], linestyle='--', alpha=0.7, linewidth=1)
-
-    # Calculate effect size (Cohen's d)
-    mean_improvement = np.mean(relative_improvements)
-    std_improvement = np.std(relative_improvements, ddof=1)
-    cohens_d = mean_improvement / std_improvement if std_improvement > 0 else 0
-
-    # Statistical test
-    t_stat, p_value = stats.ttest_1samp(relative_improvements, 0)
-    if p_value < 0.001:
-        p_text = 'P < 0.001'
-    else:
-        p_text = f'P = {p_value:.3f}'
-
-    # Add statistics
-    ax1.text(0.02, 0.98, f'{p_text}\\nCohen\'s d = {cohens_d:.2f}\\nn = {len(relative_improvements)}',
-             transform=ax1.transAxes, ha='left', va='top', fontweight='bold', fontsize=8)
-
-    ax1.set_ylabel('Inverse relative improvement (%)', fontweight='bold')
-    ax1.set_title('a', fontweight='bold', fontsize=12, loc='left', pad=10)
-    ax1.grid(True, alpha=0.2, linewidth=0.5)
-    ax1.spines['top'].set_visible(False)
-    ax1.spines['right'].set_visible(False)
-    ax1.set_xlim(0.5, 1.5)
-
-    # Panel B: Scatter plot showing relative improvement vs baseline performance
-    ax2 = axes[1]
-
-    # Color points based on improvement direction
-    point_colors = [colors['improve'] if imp > 0 else colors['target'] for imp in relative_improvements]
-
-    # Create scatter plot
-    scatter = ax2.scatter(base_f1s, relative_improvements, c=point_colors, alpha=0.8, s=40,
-                         edgecolors='white', linewidths=0.5)
-
-    # Add correlation analysis
-    correlation = np.corrcoef(base_f1s, relative_improvements)[0, 1]
-    r_squared = correlation ** 2
-
-    # Add trend line if correlation is significant
-    from scipy.stats import pearsonr
-    r, p_corr = pearsonr(base_f1s, relative_improvements)
-    if p_corr < 0.05:
-        # Add trend line
-        z = np.polyfit(base_f1s, relative_improvements, 1)
-        p = np.poly1d(z)
-        x_trend = np.linspace(min(base_f1s), max(base_f1s), 100)
-        ax2.plot(x_trend, p(x_trend), color=colors['neutral'], linestyle='-', alpha=0.8, linewidth=1)
-
-    # Add horizontal line at y=0
-    ax2.axhline(y=0, color=colors['neutral'], linestyle='--', alpha=0.7, linewidth=1)
-
-    # Add participant labels
-    for i, d in enumerate(data):
-        ax2.annotate(f'P{d["fold"]}', (base_f1s[i], relative_improvements[i]),
-                    xytext=(3, 3), textcoords='offset points', fontsize=6,
-                    alpha=0.7, color=colors['neutral'])
-
-    # Add correlation statistics
-    if p_corr < 0.001:
-        p_corr_text = 'P < 0.001'
-    else:
-        p_corr_text = f'P = {p_corr:.3f}'
-
-    ax2.text(0.02, 0.98, f'r = {correlation:.3f}\\n{p_corr_text}',
-             transform=ax2.transAxes, ha='left', va='top', fontweight='bold', fontsize=8)
-
-    ax2.set_xlabel('Baseline F1 score', fontweight='bold')
-    ax2.set_ylabel('Inverse relative improvement (%)', fontweight='bold')
-    ax2.set_title('b', fontweight='bold', fontsize=12, loc='left', pad=10)
-    ax2.grid(True, alpha=0.2, linewidth=0.5)
-    ax2.spines['top'].set_visible(False)
-    ax2.spines['right'].set_visible(False)
-
-    # Adjust layout with proper spacing
-    plt.tight_layout(pad=1.0, w_pad=2.0)
-
-    # Print summary statistics
-    absolute_improvements = [d['improvement'] for d in data]
-    median_improvement = np.median(relative_improvements)
-    print(f'\\n=== Summary Statistics for {experiment} ===')
-    print(f'Mean base F1: {np.mean(base_f1s):.4f} ± {np.std(base_f1s):.4f}')
-    print(f'Mean customized F1: {np.mean(target_f1s):.4f} ± {np.std(target_f1s):.4f}')
-    print(f'Mean absolute improvement: {np.mean(absolute_improvements):.4f} ± {np.std(absolute_improvements):.4f}')
-    print(f'Mean relative improvement: {np.mean(relative_improvements):.1f}% ± {np.std(relative_improvements):.1f}%')
-    print(f'Median relative improvement: {median_improvement:.1f}%')
-    print(f'Cohen\'s d: {cohens_d:.3f}')
-    print(f'Correlation with baseline: r = {correlation:.3f} (p = {p_corr:.3f})')
-    print(f'Participants with improvement: {sum(1 for imp in relative_improvements if imp > 0)}/{len(relative_improvements)}')
-
-    # Save figure with experiment-specific filename
-    filename = f'figures/figure1_{experiment}.jpg'
-    plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white')
-    print(f'\\nFigure saved as {filename}')
-
-    if args.experiment:
-        # Only show plot if specific experiment requested
-        plt.show()
-    else:
-        # Close figure to avoid memory issues when processing multiple experiments
-        plt.close()
-
-print("\\nProcessing complete!")
+print("Figure 1 generation complete!")

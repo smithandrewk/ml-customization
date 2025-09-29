@@ -100,6 +100,10 @@ if target_data_pct < 1.0:
     from torch.utils.data import Subset
     target_train_dataset = Subset(target_train_dataset, indices)
 
+    # In target_only mode, also subsample base_train_dataset (which is the same data)
+    if hyperparameters['mode'] == 'target_only':
+        base_train_dataset = Subset(base_train_dataset, indices)
+
     print(f'Subsampled target training data: {original_size} -> {subset_size} samples ({target_data_pct*100:.1f}%)')
 
 trainloader = DataLoader(base_train_dataset, batch_size=batch_size, shuffle=True)

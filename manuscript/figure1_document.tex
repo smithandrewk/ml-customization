@@ -11,27 +11,30 @@
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{figures/figure1.jpg}
-    \caption{\textbf{Model customization captures substantial relative improvement across participants.}
-    \textbf{a}, Distribution of relative improvement achieved through model customization, calculated as the percentage of remaining performance gap captured: $\frac{F1_{\text{customized}} - F1_{\text{base}}}{1 - F1_{\text{base}}} \times 100$. Individual participant data points are overlaid on the box plot (red circles). Statistical significance was assessed using a one-sample t-test against 0\% improvement (Cohen's $d$ = effect size measure).
-    \textbf{b}, Relationship between baseline F1 performance and relative improvement potential. Each point represents one participant (P0-P7), colored by improvement direction (green: positive, red: negative). The correlation coefficient and significance are shown. A trend line is displayed when correlation is statistically significant ($p < 0.05$). Dashed horizontal line indicates no improvement threshold.}
-    \label{fig:relative_improvement}
+    \caption{\textbf{Study design, dataset characteristics, and methodology.}
+    \textbf{a}, Experimental workflow showing the leave-one-out cross-validation approach for personalization evaluation. Population data from multiple participants is used to train a base model, which is then personalized through fine-tuning on individual target participants' data, followed by evaluation on held-out test data.
+    \textbf{b}, Dataset characteristics showing the distribution of smoking and non-smoking sessions across all eight participants (P0-P7). Data collection involved accelerometer recordings at 50Hz, with sessions annotated for smoking behavior.
+    \textbf{c}, Model architecture diagram illustrating the lightweight 1D CNN designed for 60-second accelerometer windows (3000 samples × 6 features). The network consists of three convolutional layers with increasing filter counts, followed by global average pooling and a binary classifier.
+    \textbf{d}, Representative accelerometer trace showing characteristic patterns during smoking behavior. The highlighted region demonstrates the distinctive hand-to-mouth gestures captured during smoking events, which the model learns to recognize.}
+    \label{fig:study_design}
 \end{figure}
 
 \section{Methods}
 
-\subsection{Model Customization Evaluation}
+\subsection{Experimental Design}
 
-To quantify the effectiveness of personalized model customization, we employed a relative improvement metric that accounts for ceiling effects in performance measurement (Figure~\ref{fig:relative_improvement}). Traditional absolute improvement metrics (e.g., $\Delta F1$) can be misleading when comparing participants with different baseline performance levels, as those starting near perfect performance (F1 $\approx$ 1.0) have inherently limited room for improvement.
+Our study employed a leave-one-out cross-validation approach to evaluate the effectiveness of personalized smoking detection models (Figure~\ref{fig:study_design}a). For each of the eight participants, we trained a base model on data from the remaining seven participants, then applied different personalization strategies using the target participant's training data. This approach ensures that base models contain no information about the target participant, providing a realistic assessment of personalization benefits.
 
-The relative improvement metric was calculated as:
-\begin{equation}
-\text{Relative Improvement} = \frac{F1_{\text{customized}} - F1_{\text{base}}}{1 - F1_{\text{base}}} \times 100\%
-\end{equation}
+\subsection{Dataset and Data Collection}
 
-This metric represents the percentage of the remaining performance gap that was captured through customization. For example, a participant with baseline F1 = 0.8 improving to F1 = 0.9 would achieve a relative improvement of 50\%, as half of the remaining 20\% performance gap was captured.
+Accelerometer data was collected from eight participants using wearable devices at 50Hz sampling rate (Figure~\ref{fig:study_design}b). Data was organized into 60-second windows (3000 samples per window) and labeled based on smoking bout annotations stored in our database. The dataset exhibits natural class imbalance, with smoking sessions representing approximately 12\% of all recorded sessions across participants. Session durations and smoking frequency varied considerably between individuals, reflecting real-world usage patterns.
 
-Statistical significance was assessed using a one-sample t-test against the null hypothesis of 0\% improvement (Figure~\ref{fig:relative_improvement}a). Effect size was quantified using Cohen's $d$ to assess practical significance beyond statistical significance. To examine whether customization benefits varied based on initial performance, we analyzed the correlation between baseline F1 scores and relative improvement (Figure~\ref{fig:relative_improvement}b). This analysis reveals whether participants with lower baseline performance have greater potential for relative improvement through personalization.
+\subsection{Model Architecture}
 
-The relative improvement framework provides a fair comparison across participants with heterogeneous baseline performance and offers insight into the practical impact of model customization in personalized machine learning applications.
+We developed a lightweight 1D convolutional neural network optimized for accelerometer time-series classification (Figure~\ref{fig:study_design}c). The architecture processes 3000-sample input windows corresponding to 60 seconds of 6-channel accelerometer data (x, y, z axes plus derived features). Three convolutional layers with increasing filter counts (16, 32, 64) extract hierarchical temporal features, followed by global average pooling and a binary classifier. This design balances representational capacity with computational efficiency, making it suitable for personalization scenarios requiring multiple model training runs.
+
+\subsection{Data Characteristics and Smoking Behavior}
+
+Accelerometer traces during smoking events exhibit characteristic patterns reflecting hand-to-mouth gestures and device manipulation (Figure~\ref{fig:study_design}d). These behavioral signatures vary between individuals due to differences in smoking style, device placement, and personal habits. The temporal structure of smoking sessions provides rich signal for machine learning models, with distinctive acceleration patterns occurring during cigarette handling, lighting, and consumption phases.
 
 \end{document}

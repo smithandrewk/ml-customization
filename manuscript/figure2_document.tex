@@ -11,13 +11,13 @@
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=\textwidth]{figures/figure2.jpg}
-    \caption{\textbf{Comprehensive evaluation of personalized smoking detection model performance.}
-    \textbf{a}, Distribution of F1 scores comparing base models (trained on other participants) versus customized models (fine-tuned on target participant data). Statistical significance assessed using paired t-test.
-    \textbf{b}, Relationship between baseline model performance and absolute improvement ($\Delta F1$) achieved through customization. Each point represents one participant (P0-P7), with colors indicating improvement direction (green: positive, red: negative). Correlation coefficient quantifies the relationship between initial performance and improvement potential.
-    \textbf{c}, Per-participant comparison of base versus customized model F1 scores. Individual participant results demonstrate the consistency of improvement across the cohort, with paired bars showing before/after customization performance.
-    \textbf{d}, Training dynamics aligned by transition epoch, showing target validation loss relative to the onset of customization. Individual participant curves (gray) and population mean with confidence intervals (blue) demonstrate the learning trajectory during personalization. Vertical dashed line marks the transition from base training to customization phase. Curves terminate when fewer than three participants remain to ensure robust averaging.}
-    \label{fig:comprehensive_results}
-\end{figure}
+    \caption{\textbf{Personalization significantly improves smoking detection performance across participants.}
+    \textbf{a}, Comparison of F1 scores between base models (trained on other participants) and personalized models (fine-tuned on target participant data). Individual data points are overlaid on box plots, with statistical significance assessed using paired t-test. Effect size quantified using Cohen's $d$.
+    \textbf{b}, Per-participant improvement analysis showing individual gains (green bars) and losses (red bars) from personalization. Values represent absolute F1 score improvements. Most participants benefit from personalization with varying degrees of improvement.
+    \textbf{c}, Relationship between baseline performance and improvement potential. Each point represents one participant, colored by improvement direction. Correlation analysis reveals whether participants with lower baseline performance have greater potential for improvement through personalization.
+    \textbf{d}, Success rate and effect size summary. Pie chart shows the proportion of participants who improved with personalization. Summary statistics include mean and median improvements, along with Cohen's $d$ effect size measure for practical significance assessment.}
+    \label{fig:main_results}
+\end{figure>
 
 \section{Methods}
 
