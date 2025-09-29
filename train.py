@@ -24,6 +24,7 @@ argparser.add_argument('--early_stopping_patience', type=int, default=40, help='
 argparser.add_argument('--early_stopping_patience_target', type=int, default=40, help='Early stopping patience for target phase')
 argparser.add_argument('--mode', type=str, default='full_fine_tuning', choices=['full_fine_tuning', 'last_layer_only', 'generic', 'target_only'], help='Mode')
 argparser.add_argument('--lr', type=float, default=3e-4, help='Learning rate')
+argparser.add_argument('--target_data_pct', type=float, default=1.0, help='Percentage of target training data to use (0.0-1.0)')
 args = argparser.parse_args()
 
 hyperparameters = {
@@ -44,7 +45,8 @@ hyperparameters = {
     'jitter_std': args.jitter_std,
     'magnitude_range': args.magnitude_range,
     'aug_prob': args.aug_prob,
-    'mode': args.mode
+    'mode': args.mode,
+    'target_data_pct': args.target_data_pct
     }
 
 fold = hyperparameters['fold']
@@ -82,6 +84,23 @@ else:  # target_only mode
 target_train_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_train.pt'))
 target_val_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_val.pt'))
 target_test_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_test.pt'))
+
+# Subsample target training data if specified
+target_data_pct = hyperparameters['target_data_pct']
+if target_data_pct < 1.0:
+    original_size = len(target_train_dataset)
+    subset_size = int(original_size * target_data_pct)
+
+    # Create random indices for subsampling
+    import random
+    random.seed(42)  # For reproducibility
+    indices = random.sample(range(original_size), subset_size)
+
+    # Create subset dataset
+    from torch.utils.data import Subset
+    target_train_dataset = Subset(target_train_dataset, indices)
+
+    print(f'Subsampled target training data: {original_size} -> {subset_size} samples ({target_data_pct*100:.1f}%)')
 
 trainloader = DataLoader(base_train_dataset, batch_size=batch_size, shuffle=True)
 base_valloader = DataLoader(base_val_dataset, batch_size=batch_size)

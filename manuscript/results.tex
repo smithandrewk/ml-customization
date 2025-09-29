@@ -1,0 +1,55 @@
+% Auto-generated results comparing target-only and full fine-tuning
+% Target-Only Experiment: b128_aug_patience5_target_only_20250929_122050
+% Full Fine-Tuning Experiment: b128_aug_patience5_full_fine_tuning_20250929_112221
+% Generated on: Mon Sep 29 12:37:40 PM EDT 2025
+
+\subsection{Overall Performance Comparison}
+
+Table~\ref{tab:results} compares the performance of target-only training, base model (no adaptation), and full fine-tuning across all participants.
+
+\begin{table}[H]
+\centering
+\caption{Transfer learning strategy comparison - Target-Only vs Full Fine-Tuning}
+\label{tab:results}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Participant & Target-Only & Base Model & Full FT & Best Method \\
+\midrule
+asfik & 0.898 & 0.882 & 0.918 & Full FT \\
+ejaz & 0.865 & 0.895 & 0.889 & Base Model \\
+tonmoy & 0.833 & 0.719 & 0.861 & Full FT \\
+\midrule
+Mean & 0.866 & 0.832 & 0.889 & - \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Detailed Performance Analysis}
+
+\begin{table}[H]
+\centering
+\caption{Detailed performance comparison - Detailed Comparison}
+\label{tab:detailed_results}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Participant & Target-Only & Base Model & Full FT & Target vs Base & Full FT vs Base \\
+\midrule
+asfik & 0.898 & 0.882 & 0.918 & +0.016 & +0.036 \\
+ejaz & 0.865 & 0.895 & 0.889 & -0.029 & -0.006 \\
+tonmoy & 0.833 & 0.719 & 0.861 & +0.114 & +0.143 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Performance Summary}
+
+The results demonstrate the effectiveness of different transfer learning approaches:
+
+\begin{itemize}
+    \item \textbf{Target-Only vs Base Model}: Mean improvement of +0.034 F1 points
+    \item \textbf{Full Fine-Tuning vs Base Model}: Mean improvement of +0.057 F1 points
+    \item \textbf{Full Fine-Tuning vs Target-Only}: Mean improvement of +0.024 F1 points
+    \item \textbf{Success Rate}: Full fine-tuning outperformed target-only for 3/3 participants (100\%)
+\end{itemize}
+
+These results highlight the value of transfer learning, with full fine-tuning providing the best performance by leveraging both population-level knowledge and individual adaptation.

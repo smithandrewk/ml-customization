@@ -2,8 +2,9 @@ batch_size=512
 patience=5
 lr=3e-4
 mode="target_only" # 'full_fine_tuning', 'last_layer_only', 'generic', 'target_only'
+target_data_pct=0.25  # Percentage of target training data to use (0.25, 0.5, 0.75, 1.0)
 timestamp=$(date +%Y%m%d_%H%M%S)
-prefix="b${batch_size}_aug_patience${patience}_${mode}_${timestamp}"
+prefix="b${batch_size}_aug_patience${patience}_${mode}_pct${target_data_pct}_${timestamp}"
 
 for fold in {0..2}
 do
@@ -18,8 +19,9 @@ do
         --early_stopping_patience $patience \
         --early_stopping_patience_target $patience \
         --mode $mode \
-        --lr $lr
+        --lr $lr \
+        --target_data_pct $target_data_pct
 done
 
-scp -r experiments/${prefix} 10.173.98.188:~/ml-customization/experiments/
-rm -rf experiments/${prefix}
+# scp -r experiments/${prefix} 10.173.98.188:~/ml-customization/experiments/
+# rm -rf experiments/${prefix}
