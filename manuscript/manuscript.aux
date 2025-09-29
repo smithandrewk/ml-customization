@@ -6,27 +6,42 @@
 \@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Dataset and Participants}{1}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Model Architecture}{2}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Transfer Learning Strategies}{2}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.4}Training Methodology}{2}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.5}Evaluation}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.4}Data Efficiency Analysis}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.5}Training Methodology}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.6}Evaluation}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {2.6.1}Performance Metrics}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.7}Statistical Analysis and Visualization}{3}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {3}Results}{3}{}\protected@file@percent }
 \newlabel{sec:results}{{3}{3}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Overall Performance Comparison}{3}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Transfer learning strategy comparison - Target-Only vs Full Fine-Tuning}}{3}{}\protected@file@percent }
-\newlabel{tab:results}{{1}{3}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Detailed Performance Analysis}{3}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Detailed performance comparison - Detailed Comparison}}{3}{}\protected@file@percent }
-\newlabel{tab:detailed_results}{{2}{3}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Performance Summary}{3}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {4}Discussion}{3}{}\protected@file@percent }
-\newlabel{sec:discussion}{{4}{3}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces \textbf  {Study design, dataset characteristics, and methodology.} \textbf  {a}, Experimental workflow showing the leave-one-out cross-validation approach for personalization evaluation. Population data from multiple participants is used to train a base model, which is then personalized through fine-tuning on individual target participants' data, followed by evaluation on held-out test data. \textbf  {b}, Dataset characteristics showing the distribution of smoking and non-smoking sessions across all eight participants (P0-P7). Data collection involved accelerometer recordings at 50Hz, with sessions annotated for smoking behavior. \textbf  {c}, Model architecture diagram illustrating the lightweight 1D CNN designed for 60-second accelerometer windows (3000 samples $\times $ 6 features). The network consists of three convolutional layers with increasing filter counts, followed by global average pooling and a binary classifier. \textbf  {d}, Representative accelerometer trace showing characteristic patterns during smoking behavior. The highlighted region demonstrates the distinctive hand-to-mouth gestures captured during smoking events, which the model learns to recognize.}}{4}{}\protected@file@percent }
+\newlabel{fig:study_design}{{1}{4}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces \textbf  {Personalization significantly improves smoking detection performance across participants.} \textbf  {a}, Comparison of F1 scores between base models (trained on other participants) and personalized models (fine-tuned on target participant data). Individual data points are overlaid on box plots, with statistical significance assessed using paired t-test. Effect size quantified using Cohen's $d$. \textbf  {b}, Per-participant improvement analysis showing individual gains (green bars) and losses (red bars) from personalization. Values represent absolute F1 score improvements. Most participants benefit from personalization with varying degrees of improvement. \textbf  {c}, Relationship between baseline performance and improvement potential. Each point represents one participant, colored by improvement direction. Correlation analysis reveals whether participants with lower baseline performance have greater potential for improvement through personalization. \textbf  {d}, Success rate and effect size summary. Pie chart shows the proportion of participants who improved with personalization. Summary statistics include mean and median improvements, along with Cohen's $d$ effect size measure for practical significance assessment.}}{5}{}\protected@file@percent }
+\newlabel{fig:main_results}{{2}{5}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces \textbf  {Training dynamics reveal personalization mechanisms and success patterns.} \textbf  {a}, Loss curves aligned by transition epoch showing target validation loss relative to the onset of personalization. Individual participant curves (gray) and population mean with confidence intervals (blue) demonstrate the learning trajectory during personalization. Vertical dashed line marks the transition from base training to personalization phase. \textbf  {b}, Distribution of relative improvement achieved through personalization, calculated as the percentage of remaining performance gap captured: $\frac  {F1_{\text  {personalized}} - F1_{\text  {base}}}{1 - F1_{\text  {base}}} \times 100$. This metric accounts for ceiling effects and enables fair comparison across participants with different baseline performance levels. \textbf  {c}, Convergence analysis examining the relationship between personalization training duration and final improvement. Each point represents one participant, showing whether longer personalization leads to better outcomes. \textbf  {d}, Success pattern analysis categorizing participants by improvement magnitude. Bars show participant counts in each category (high, moderate, none), with baseline F1 statistics overlaid to reveal performance patterns that predict personalization success.}}{6}{}\protected@file@percent }
+\newlabel{fig:training_dynamics}{{3}{6}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces \textbf  {Transfer learning enables superior performance with limited target data.} Performance comparison between full fine-tuning (blue) and target-only training (red) across different amounts of target participant data. Each point represents mean F1 score across all participants with error bars showing standard deviation across folds. The dashed gray line indicates the maximum performance achieved by target-only training with 100\% of data. Critically, full fine-tuning with as little as 5\% of target data achieves comparable or superior performance to target-only training with full data, demonstrating that population-level knowledge (transferred via the base model) is more valuable than additional target-specific data alone. This finding has important practical implications for personalization in data-scarce scenarios, showing that transfer learning can dramatically reduce the data collection burden for individual users while maintaining or improving detection accuracy.}}{7}{}\protected@file@percent }
+\newlabel{fig:data_efficiency}{{4}{7}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Overall Performance Improvements}{8}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Transfer learning strategy comparison - b128\_aug\_patience50\_full\_fine\_tuning\_pct1.0\_20250929\_144626}}{8}{}\protected@file@percent }
+\newlabel{tab:results}{{1}{8}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Detailed Performance Analysis}{8}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Detailed performance metrics - b128\_aug\_patience50\_full\_fine\_tuning\_pct1.0\_20250929\_144626}}{8}{}\protected@file@percent }
+\newlabel{tab:detailed_results}{{2}{8}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Individual Variability}{8}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4}Training Dynamics}{8}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Training dynamics analysis - b128\_aug\_patience50\_full\_fine\_tuning\_pct1.0\_20250929\_144626}}{8}{}\protected@file@percent }
+\newlabel{tab:training_dynamics}{{3}{8}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.5}Transfer Learning Data Efficiency}{9}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4}Discussion}{9}{}\protected@file@percent }
+\newlabel{sec:discussion}{{4}{9}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Implications for Practice}{9}{}\protected@file@percent }
 \bibstyle{plain}
 \bibdata{references}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Implications for Practice}{4}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Limitations}{4}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {5}Conclusion}{4}{}\protected@file@percent }
-\newlabel{sec:conclusion}{{5}{4}}
-\@writefile{toc}{\contentsline {section}{\numberline {A}Model Architecture Details}{4}{}\protected@file@percent }
-\newlabel{appendix:architecture}{{A}{4}}
-\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces SimpleSmokingCNN Architecture Specification}}{4}{}\protected@file@percent }
-\newlabel{tab:architecture}{{3}{4}}
-\gdef \@abspage@last{4}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Limitations}{10}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}Conclusion}{10}{}\protected@file@percent }
+\newlabel{sec:conclusion}{{5}{10}}
+\@writefile{toc}{\contentsline {section}{\numberline {A}Model Architecture Details}{10}{}\protected@file@percent }
+\newlabel{appendix:architecture}{{A}{10}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces SimpleSmokingCNN Architecture Specification}}{10}{}\protected@file@percent }
+\newlabel{tab:architecture}{{4}{10}}
+\gdef \@abspage@last{10}

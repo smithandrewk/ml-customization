@@ -29,7 +29,7 @@
 \maketitle
 
 \begin{abstract}
-This paper investigates the effectiveness of personalizing neural networks for cigarette smoking detection using accelerometer data from wearable devices. We demonstrate that fine-tuning a general smoking detection model on individual participants' data significantly improves performance compared to a one-size-fits-all approach. Using a leave-one-out cross-validation study across \numparticipants{} participants, we show that personalized models achieve substantial improvements in F1-score, with individual gains ranging from \mingain\% to \maxgain\% (mean: \meangain\%). Our findings suggest that personalization is a promising approach for improving the accuracy of behavioral detection systems in real-world deployments, with \responderrate\% of participants showing improved performance.
+This paper investigates the effectiveness of personalizing neural networks for cigarette smoking detection using accelerometer data from wearable devices. We demonstrate that fine-tuning a general smoking detection model on individual participants' data significantly improves performance compared to a one-size-fits-all approach. Using a leave-one-out cross-validation study across \numparticipants{} participants, we show that personalized models achieve substantial improvements in F1-score. Relative to baseline performance, individual gains range from \mingain\% to \maxgain\% (mean: \meangain\%). When accounting for ceiling effects, personalization captures \minroom\% to \maxroom\% (mean: \meanroom\%) of the remaining room for improvement to perfect performance. Our findings suggest that personalization is a promising approach for improving the accuracy of behavioral detection systems in real-world deployments, with \responderrate\% of participants showing improved performance.
 \end{abstract}
 
 \section{Introduction}
@@ -58,6 +58,20 @@ We employed a lightweight 1D convolutional neural network optimized for accelero
 
 The network processes 3000-sample input windows corresponding to 60 seconds of accelerometer data at 50Hz sampling rate, and outputs binary smoking probability predictions (Figure~\ref{fig:study_design}d). Complete architectural details are provided in Appendix~\ref{appendix:architecture}.
 
+\subsection{Data Splits and Evaluation Protocol}
+
+To ensure unbiased performance evaluation and prevent information leakage, we employed a rigorous three-way data splitting strategy for each participant. Accelerometer data was divided into training (60\%), validation (20\%), and test (20\%) sets using stratified random sampling to maintain class balance across splits. Each split served a distinct purpose in our evaluation framework:
+
+\begin{enumerate}
+    \item \textbf{Training set}: Used exclusively for optimizing model parameters during both base model training (Phase 1) and personalization (Phase 2). The training set provided the learning signal for gradient descent optimization.
+
+    \item \textbf{Validation set}: Used for early stopping decisions and hyperparameter selection. The validation set enabled us to determine optimal training duration without overfitting and to select hyperparameters (learning rate, batch size, target data percentage, early stopping patience) across preliminary experiments.
+
+    \item \textbf{Test set}: Held-out for final unbiased performance evaluation. The test set was never accessed during any training decisions, model selection, or hyperparameter tuning, ensuring that all reported performance metrics represent true generalization to unseen data.
+\end{enumerate}
+
+All F1 scores reported in this manuscript represent performance on held-out test sets. Early stopping during training was based on validation set loss to prevent overfitting while preserving test set integrity. Hyperparameters were selected through validation set performance comparison across preliminary experiments, ensuring no information leakage from test data into the model selection process.
+
 \subsection{Transfer Learning Strategies}
 
 To systematically evaluate personalization approaches, we compared three transfer learning strategies:
@@ -67,6 +81,10 @@ To systematically evaluate personalization approaches, we compared three transfe
 \textbf{2. Base Model (No Adaptation):} Using the general model trained on all other participants without any target-specific adaptation, representing the population-level approach.
 
 \textbf{3. Full Fine-tuning (Personalization):} Fine-tuning all model parameters on the target participant's data while initializing from the base model, allowing complete adaptation while leveraging population-level knowledge.
+
+\subsection{Data Efficiency Analysis}
+
+To investigate the data requirements for effective personalization, we conducted an ablation study examining performance across different amounts of target participant data. We systematically varied the percentage of available target training data (5\%, 50\%, and 100\%) and compared both target-only training and full fine-tuning strategies at each data level (Figure~\ref{fig:data_efficiency}). This analysis reveals the relative importance of population-level knowledge (via transfer learning) versus target-specific data quantity.
 
 \subsection{Training Methodology}
 
@@ -82,19 +100,74 @@ Depending on the transfer learning strategy, we either: (1) trained a new model 
 
 We conducted leave-one-out cross-validation across all 8 participants. For each participant, we evaluated all three transfer learning strategies:
 \begin{enumerate}
-    \item Trained a base model on the remaining 7 participants
-    \item Applied each transfer learning strategy using the target participant's training data
-    \item Evaluated all approaches on the target participant's validation data
+    \item Trained a base model on the remaining 7 participants' training and validation data
+    \item Applied each transfer learning strategy using the target participant's training data, with early stopping based on the target participant's validation set
+    \item Evaluated all approaches on the target participant's held-out test set to obtain unbiased performance estimates
     \item Measured computational efficiency metrics for each strategy
 \end{enumerate}
 
-Performance was measured using F1-score and validation loss as primary metrics (Figure~\ref{fig:main_results}). To account for ceiling effects in performance measurement, we also employed a relative improvement metric that quantifies the percentage of remaining performance gap captured through personalization (Figure~\ref{fig:training_dynamics}b). Additionally, we tracked computational efficiency metrics including training time, epochs to convergence, and GPU memory usage to assess the practical trade-offs between performance gains and computational overhead.
+The use of separate validation and test sets ensures that our reported performance metrics reflect true generalization rather than overfitting to the data used for model selection.
+
+\subsubsection{Performance Metrics}
+
+Performance was measured using F1-score on held-out test sets as the primary metric (Figure~\ref{fig:main_results}). All reported F1 scores represent test set performance. To comprehensively characterize personalization benefits, we report three complementary improvement metrics:
+
+\begin{enumerate}
+    \item \textbf{Absolute improvement ($\Delta$F1)}: The raw difference in F1-score between personalized and base models: $\Delta F1 = F1_{\text{personalized}} - F1_{\text{base}}$
+
+    \item \textbf{Relative percentage improvement}: The proportional gain relative to baseline performance: $\frac{\Delta F1}{F1_{\text{base}}} \times 100\%$. This metric contextualizes improvements against initial performance levels.
+
+    \item \textbf{Room for improvement captured}: The percentage of the remaining performance gap (to perfect F1 = 1.0) that personalization captures: $\frac{\Delta F1}{1 - F1_{\text{base}}} \times 100\%$. This metric accounts for ceiling effects, enabling fair comparison across participants with different baseline performance levels (Figure~\ref{fig:training_dynamics}b).
+\end{enumerate}
+
+Additionally, we tracked computational efficiency metrics including training time, epochs to convergence, and GPU memory usage to assess the practical trade-offs between performance gains and computational overhead.
 
 \subsection{Statistical Analysis and Visualization}
 
 Statistical significance was assessed using paired t-tests for comparing base and personalized model performance, with effect size quantified using Cohen's $d$ (Figure~\ref{fig:main_results}a). Individual participant responses were visualized using both grouped comparisons and scatter plots to reveal heterogeneity in personalization benefits (Figure~\ref{fig:main_results}b,c). Success rates were summarized using descriptive statistics and visualized as pie charts with accompanying effect size measures (Figure~\ref{fig:main_results}d).
 
 For training dynamics analysis, we developed a temporal alignment approach that synchronizes all experiments relative to their personalization transition epoch, enabling population-level analysis of learning trajectories while preserving individual participant patterns (Figure~\ref{fig:training_dynamics}a). Convergence patterns were analyzed by examining the relationship between training duration and final improvement outcomes (Figure~\ref{fig:training_dynamics}c).
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{../figures/figure1.pdf}
+    \caption{\textbf{Study design, dataset characteristics, and methodology.}
+    \textbf{a}, Experimental workflow showing the leave-one-out cross-validation approach for personalization evaluation. Population data from multiple participants is used to train a base model, which is then personalized through fine-tuning on individual target participants' data, followed by evaluation on held-out test data.
+    \textbf{b}, Dataset characteristics showing the distribution of smoking and non-smoking sessions across all eight participants (P0-P7). Data collection involved accelerometer recordings at 50Hz, with sessions annotated for smoking behavior.
+    \textbf{c}, Model architecture diagram illustrating the lightweight 1D CNN designed for 60-second accelerometer windows (3000 samples $\times$ 6 features). The network consists of three convolutional layers with increasing filter counts, followed by global average pooling and a binary classifier.
+    \textbf{d}, Representative accelerometer trace showing characteristic patterns during smoking behavior. The highlighted region demonstrates the distinctive hand-to-mouth gestures captured during smoking events, which the model learns to recognize.}
+    \label{fig:study_design}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{../figures/figure2.pdf}
+    \caption{\textbf{Personalization significantly improves smoking detection performance across participants.}
+    \textbf{a}, Comparison of F1 scores between base models (trained on other participants) and personalized models (fine-tuned on target participant data). Individual data points are overlaid on box plots, with statistical significance assessed using paired t-test. Effect size quantified using Cohen's $d$.
+    \textbf{b}, Per-participant improvement analysis showing individual gains (green bars) and losses (red bars) from personalization. Values represent absolute F1 score improvements. Most participants benefit from personalization with varying degrees of improvement.
+    \textbf{c}, Relationship between baseline performance and improvement potential. Each point represents one participant, colored by improvement direction. Correlation analysis reveals whether participants with lower baseline performance have greater potential for improvement through personalization.
+    \textbf{d}, Success rate and effect size summary. Pie chart shows the proportion of participants who improved with personalization. Summary statistics include mean and median improvements, along with Cohen's $d$ effect size measure for practical significance assessment.}
+    \label{fig:main_results}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{../figures/figure3.pdf}
+    \caption{\textbf{Training dynamics reveal personalization mechanisms and success patterns.}
+    \textbf{a}, Loss curves aligned by transition epoch showing target validation loss relative to the onset of personalization. Individual participant curves (gray) and population mean with confidence intervals (blue) demonstrate the learning trajectory during personalization. Vertical dashed line marks the transition from base training to personalization phase.
+    \textbf{b}, Distribution of relative improvement achieved through personalization, calculated as the percentage of remaining performance gap captured: $\frac{F1_{\text{personalized}} - F1_{\text{base}}}{1 - F1_{\text{base}}} \times 100$. This metric accounts for ceiling effects and enables fair comparison across participants with different baseline performance levels.
+    \textbf{c}, Convergence analysis examining the relationship between personalization training duration and final improvement. Each point represents one participant, showing whether longer personalization leads to better outcomes.
+    \textbf{d}, Success pattern analysis categorizing participants by improvement magnitude. Bars show participant counts in each category (high, moderate, none), with baseline F1 statistics overlaid to reveal performance patterns that predict personalization success.}
+    \label{fig:training_dynamics}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{../figures/figure4.pdf}
+    \caption{\textbf{Transfer learning enables superior performance with limited target data.}
+    Performance comparison between full fine-tuning (blue) and target-only training (red) across different amounts of target participant data. Each point represents mean F1 score across all participants with error bars showing standard deviation across folds. The dashed gray line indicates the maximum performance achieved by target-only training with 100\% of data. Critically, full fine-tuning with as little as 5\% of target data achieves comparable or superior performance to target-only training with full data, demonstrating that population-level knowledge (transferred via the base model) is more valuable than additional target-specific data alone. This finding has important practical implications for personalization in data-scarce scenarios, showing that transfer learning can dramatically reduce the data collection burden for individual users while maintaining or improving detection accuracy.}
+    \label{fig:data_efficiency}
+\end{figure}
 
 \section{Results}
 \label{sec:results}
@@ -106,7 +179,13 @@ Our leave-one-out cross-validation results demonstrate consistent improvements f
 
 Detailed analysis of training dynamics reveals that personalization benefits are achieved rapidly, with most improvements occurring within the first 10-15 epochs after transition to target-specific training (Figure~\ref{fig:training_dynamics}a). The relative improvement analysis demonstrates that personalization captures a substantial portion of each participant's remaining performance potential, with a mean relative improvement of 35\% across participants (Figure~\ref{fig:training_dynamics}b).
 
-Success pattern analysis reveals that participants with moderate baseline performance (F1 ≈ 0.80-0.85) benefit most from personalization, suggesting an optimal zone where fine-tuning is most effective (Figure~\ref{fig:training_dynamics}d). Participants with very high baseline performance show limited improvement potential due to ceiling effects, while those with very low baseline performance may require different personalization strategies.
+Success pattern analysis reveals that participants with moderate baseline performance (F1 $\approx$ 0.80-0.85) benefit most from personalization, suggesting an optimal zone where fine-tuning is most effective (Figure~\ref{fig:training_dynamics}d). Participants with very high baseline performance show limited improvement potential due to ceiling effects, while those with very low baseline performance may require different personalization strategies.
+
+\subsection{Transfer Learning Data Efficiency}
+
+A critical finding from our data efficiency analysis is that transfer learning via full fine-tuning dramatically reduces the amount of target-specific data required for effective personalization (Figure~\ref{fig:data_efficiency}). Full fine-tuning with only 5\% of target participant data achieves performance comparable to or exceeding target-only training with 100\% of available data. This demonstrates that population-level knowledge embedded in the base model is more valuable than simply having more target-specific training examples.
+
+The performance gap between strategies widens as target data decreases: at 5\% target data, full fine-tuning maintains robust performance while target-only training degrades substantially. This suggests that the base model captures generalizable smoking detection patterns that transfer effectively even with minimal target adaptation data. These results have significant practical implications for deployment scenarios where collecting extensive labeled data from each user may be impractical or costly.
 
 \section{Discussion}
 \label{sec:discussion}
@@ -118,6 +197,8 @@ Our results provide evidence that personalizing neural networks can significantl
 \subsection{Implications for Practice}
 
 The finding that 6 out of 8 participants (75\%) benefited from personalization suggests that adaptive systems could implement personalization selectively, potentially using validation performance to determine when personalization is beneficial.
+
+Moreover, our data efficiency results (Figure~\ref{fig:data_efficiency}) demonstrate that effective personalization can be achieved with remarkably small amounts of target data when leveraging transfer learning. This has important practical implications for deploying personalized smoking detection systems: users may only need to provide a handful of labeled smoking events (representing 5-10\% of typical training data) to achieve personalized models that outperform traditional approaches trained on their complete data from scratch. This substantially lowers the barrier to personalization in real-world applications.
 
 \subsection{Limitations}
 

@@ -8,6 +8,10 @@ from scipy import stats
 import argparse
 import pandas as pd
 
+# Configure matplotlib for high-quality vector graphics
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
+
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Generate Figure 1: Study Design and Methodology')
 parser.add_argument('--experiment', type=str, help='Specific experiment directory to plot')
@@ -192,15 +196,13 @@ ax4.set_xlim(0, 60)
 # Adjust layout
 plt.tight_layout(pad=1.0, h_pad=1.5, w_pad=1.5)
 
-# Save figure
+# Save figure as PDF vector graphics
 os.makedirs('figures', exist_ok=True)
-filename = 'figures/figure1.jpg'
-plt.savefig(filename, dpi=300, bbox_inches='tight', facecolor='white')
+filename = 'figures/figure1.pdf'
+plt.savefig(filename, bbox_inches='tight', format='pdf', dpi=300)
 print(f'Figure 1 saved as {filename}')
 
-if args.experiment:
-    plt.show()
-else:
-    plt.close()
+# Always close the figure after saving to avoid GUI popup
+plt.close()
 
 print("Figure 1 generation complete!")

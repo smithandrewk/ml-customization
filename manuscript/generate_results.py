@@ -67,9 +67,9 @@ def generate_performance_table(results: Dict, experiment_name: str) -> str:
     for participant, data in sorted(results.items()):
         metrics = data['metrics']
 
-        # Extract key metrics
-        base_f1 = metrics.get('best_target_val_f1_from_best_base_model', 0)
-        target_f1 = metrics.get('best_target_val_f1', 0)
+        # Extract key metrics (test set performance)
+        base_f1 = metrics.get('base_test_f1', 0)
+        target_f1 = metrics.get('test_f1', 0)
 
         # Determine best method (simplified for now)
         best_method = "Full FT" if target_f1 > base_f1 else "Base Model"
@@ -110,44 +110,49 @@ def generate_detailed_metrics_table(results: Dict, experiment_name: str) -> str:
         "\\centering",
         f"\\caption{{Detailed performance metrics - {safe_experiment_name}}}",
         "\\label{tab:detailed_results}",
-        "\\begin{tabular}{@{}lcccc@{}}",
+        "\\begin{tabular}{@{}lccccc@{}}",
         "\\toprule",
-        "Participant & Base F1 & Full FT F1 & Improvement & \\% Improvement \\\\",
+        "Participant & Base F1 & Full FT F1 & $\\Delta$F1 & Rel. \\% & Room \\% \\\\",
         "\\midrule"
     ]
 
     improvements = []
+    room_improvements = []
 
     for participant, data in sorted(results.items()):
         metrics = data['metrics']
 
-        base_f1 = metrics.get('best_target_val_f1_from_best_base_model', 0)
-        target_f1 = metrics.get('best_target_val_f1', 0)
+        base_f1 = metrics.get('base_test_f1', 0)
+        target_f1 = metrics.get('test_f1', 0)
 
         improvement = target_f1 - base_f1
         pct_improvement = (improvement / base_f1) * 100 if base_f1 > 0 else 0
+        room_improvement = (improvement / (1 - base_f1)) * 100 if base_f1 < 1 else 0
 
         improvements.append(improvement)
+        room_improvements.append(room_improvement)
 
         # Format improvement with sign
         imp_str = f"{improvement:+.3f}"
         pct_str = f"{pct_improvement:+.1f}\\%"
+        room_str = f"{room_improvement:+.1f}\\%"
 
-        row = f"{participant} & {base_f1:.3f} & {target_f1:.3f} & {imp_str} & {pct_str} \\\\"
+        row = f"{participant} & {base_f1:.3f} & {target_f1:.3f} & {imp_str} & {pct_str} & {room_str} \\\\"
         latex_lines.append(row)
 
     # Add mean row
     if improvements:
         mean_improvement = sum(improvements) / len(improvements)
-        mean_base = sum(data['metrics'].get('best_target_val_f1_from_best_base_model', 0)
+        mean_base = sum(data['metrics'].get('base_test_f1', 0)
                        for data in results.values()) / len(results)
-        mean_target = sum(data['metrics'].get('best_target_val_f1', 0)
+        mean_target = sum(data['metrics'].get('test_f1', 0)
                          for data in results.values()) / len(results)
         mean_pct = (mean_improvement / mean_base) * 100 if mean_base > 0 else 0
+        mean_room = sum(room_improvements) / len(room_improvements)
 
         latex_lines.extend([
             "\\midrule",
-            f"Mean & {mean_base:.3f} & {mean_target:.3f} & {mean_improvement:+.3f} & {mean_pct:+.1f}\\% \\\\"
+            f"Mean & {mean_base:.3f} & {mean_target:.3f} & {mean_improvement:+.3f} & {mean_pct:+.1f}\\% & {mean_room:+.1f}\\% \\\\"
         ])
 
     latex_lines.extend([
@@ -209,22 +214,31 @@ def generate_abstract_stats(experiment_name: str, output_file: str = "abstract_s
 
     # Calculate statistics
     pct_improvements = []
+    room_improvements = []
     base_f1s = []
 
     for participant, data in results.items():
         metrics = data['metrics']
-        base_f1 = metrics.get('best_target_val_f1_from_best_base_model', 0)
-        target_f1 = metrics.get('best_target_val_f1', 0)
+        base_f1 = metrics.get('base_test_f1', 0)
+        target_f1 = metrics.get('test_f1', 0)
 
         base_f1s.append(base_f1)
         improvement = target_f1 - base_f1
         pct_improvement = (improvement / base_f1) * 100 if base_f1 > 0 else 0
+        room_improvement = (improvement / (1 - base_f1)) * 100 if base_f1 < 1 else 0
+
         pct_improvements.append(pct_improvement)
+        room_improvements.append(room_improvement)
 
     # Compute statistics
     min_gain = min(pct_improvements)
     max_gain = max(pct_improvements)
     mean_gain = sum(pct_improvements) / len(pct_improvements)
+
+    min_room = min(room_improvements)
+    max_room = max(room_improvements)
+    mean_room = sum(room_improvements) / len(room_improvements)
+
     num_participants = len(results)
     positive_gains = [p for p in pct_improvements if p > 0]
     responder_rate = len(positive_gains) / len(pct_improvements) * 100
@@ -238,23 +252,36 @@ def generate_abstract_stats(experiment_name: str, output_file: str = "abstract_s
 \\newcommand{{\\mingain}}{{{min_gain:.1f}}}
 \\newcommand{{\\maxgain}}{{{max_gain:.1f}}}
 \\newcommand{{\\meangain}}{{{mean_gain:.1f}}}
+\\newcommand{{\\minroom}}{{{min_room:.1f}}}
+\\newcommand{{\\maxroom}}{{{max_room:.1f}}}
+\\newcommand{{\\meanroom}}{{{mean_room:.1f}}}
 \\newcommand{{\\responderrate}}{{{responder_rate:.0f}}}
 
 % Detailed statistics (for reference)
 % Participants: {list(results.keys())}
-% Individual gains: {[f"{p:.1f}%" for p in pct_improvements]}
-% Mean F1 improvement: {mean_gain:.1f}%
-% Range: {min_gain:.1f}% to {max_gain:.1f}%
+% Individual relative gains: {[f"{p:.1f}%" for p in pct_improvements]}
+% Individual room captured: {[f"{r:.1f}%" for r in room_improvements]}
+% Mean relative improvement: {mean_gain:.1f}%
+% Mean room captured: {mean_room:.1f}%
+% Range (relative): {min_gain:.1f}% to {max_gain:.1f}%
+% Range (room): {min_room:.1f}% to {max_room:.1f}%
 """
 
     with open(output_file, 'w') as f:
         f.write(latex_content)
 
-    print(f"Generated abstract statistics: {min_gain:.1f}% to {max_gain:.1f}% (mean: {mean_gain:.1f}%)")
+    print(f"Generated abstract statistics:")
+    print(f"  Relative improvement: {min_gain:.1f}% to {max_gain:.1f}% (mean: {mean_gain:.1f}%)")
+    print(f"  Room captured: {min_room:.1f}% to {max_room:.1f}% (mean: {mean_room:.1f}%)")
     return min_gain, max_gain, mean_gain, num_participants
 
 def generate_results_tex(experiment_name: str, output_file: str = "results.tex"):
-    """Generate complete results section with tables and analysis."""
+    """
+    Generate complete results section with tables and analysis.
+
+    Note: This function uses test set metrics (base_test_f1, test_f1) for all
+    performance reporting to ensure unbiased evaluation on held-out data.
+    """
 
     # Load experiment results
     experiment_dir = os.path.join('..', 'experiments', experiment_name)
@@ -271,20 +298,25 @@ def generate_results_tex(experiment_name: str, output_file: str = "results.tex")
     improvements = []
     base_f1s = []
     target_f1s = []
+    room_improvements = []
 
     for participant, data in results.items():
         metrics = data['metrics']
-        base_f1 = metrics.get('best_target_val_f1_from_best_base_model', 0)
-        target_f1 = metrics.get('best_target_val_f1', 0)
+        base_f1 = metrics.get('base_test_f1', 0)
+        target_f1 = metrics.get('test_f1', 0)
 
         base_f1s.append(base_f1)
         target_f1s.append(target_f1)
-        improvements.append(target_f1 - base_f1)
+        improvement = target_f1 - base_f1
+        improvements.append(improvement)
+        room_improvement = (improvement / (1 - base_f1)) * 100 if base_f1 < 1 else 0
+        room_improvements.append(room_improvement)
 
     mean_improvement = sum(improvements) / len(improvements)
     mean_base = sum(base_f1s) / len(base_f1s)
     mean_target = sum(target_f1s) / len(target_f1s)
     mean_pct_improvement = (mean_improvement / mean_base) * 100
+    mean_room_improvement = sum(room_improvements) / len(room_improvements)
 
     # Count responders
     positive_improvements = [imp for imp in improvements if imp > 0]
@@ -300,7 +332,7 @@ Table~\\ref{{tab:results}} summarizes the performance comparison between base mo
 
 {generate_performance_table(results, experiment_name)}
 
-The results show that full fine-tuning achieved a mean F1-score improvement of +{mean_improvement:.3f} ({mean_pct_improvement:+.1f}\\%) over the base model. {len(positive_improvements)} out of {len(results)} participants ({responder_rate:.0f}\\%) showed improvements with personalization.
+The results show that full fine-tuning achieved a mean test set F1-score improvement of +{mean_improvement:.3f} (relative improvement: {mean_pct_improvement:+.1f}\\%, room captured: {mean_room_improvement:+.1f}\\%) over the base model. {len(positive_improvements)} out of {len(results)} participants ({responder_rate:.0f}\\%) showed improvements with personalization. All reported F1 scores are computed on held-out test sets that were never used for training or hyperparameter selection.
 
 \\subsection{{Detailed Performance Analysis}}
 
@@ -319,13 +351,14 @@ The results reveal significant individual variability in the effectiveness of pe
 
     for i, (participant, improvement) in enumerate(zip(results.keys(), improvements)):
         pct_improvement = (improvement / base_f1s[i]) * 100 if base_f1s[i] > 0 else 0
+        room_pct = room_improvements[i]
 
         if pct_improvement > 15:
-            strong_responders.append(f"{participant} ({pct_improvement:+.1f}\\%)")
+            strong_responders.append(f"{participant} (rel: {pct_improvement:+.1f}\\%, room: {room_pct:+.1f}\\%)")
         elif pct_improvement > 5:
-            moderate_responders.append(f"{participant} ({pct_improvement:+.1f}\\%)")
+            moderate_responders.append(f"{participant} (rel: {pct_improvement:+.1f}\\%, room: {room_pct:+.1f}\\%)")
         else:
-            non_responders.append(f"{participant} ({pct_improvement:+.1f}\\%)")
+            non_responders.append(f"{participant} (rel: {pct_improvement:+.1f}\\%, room: {room_pct:+.1f}\\%)")
 
     if strong_responders:
         latex_content += f"""
@@ -363,8 +396,11 @@ Analysis of the training metrics reveals interesting patterns:
         f.write(latex_content)
 
     print(f"Generated results.tex with data from experiment: {experiment_name}")
-    print(f"Mean improvement: {mean_improvement:.3f} F1 points ({mean_pct_improvement:+.1f}%)")
+    print(f"Mean test set improvement: {mean_improvement:.3f} F1 points")
+    print(f"  Relative improvement: {mean_pct_improvement:+.1f}%")
+    print(f"  Room captured: {mean_room_improvement:+.1f}%")
     print(f"Responder rate: {responder_rate:.0f}% ({len(positive_improvements)}/{len(results)} participants)")
+    print(f"\nNote: All metrics are computed on held-out test sets")
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:

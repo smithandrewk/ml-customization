@@ -1,55 +1,78 @@
-% Auto-generated results comparing target-only and full fine-tuning
-% Target-Only Experiment: b128_aug_patience5_target_only_20250929_122050
-% Full Fine-Tuning Experiment: b128_aug_patience5_full_fine_tuning_20250929_112221
-% Generated on: Mon Sep 29 12:37:40 PM EDT 2025
+% Auto-generated results from experiment: b128_aug_patience50_full_fine_tuning_pct1.0_20250929_144626
+% Generated on: Mon Sep 29 07:02:11 PM EDT 2025
 
-\subsection{Overall Performance Comparison}
+\subsection{Overall Performance Improvements}
 
-Table~\ref{tab:results} compares the performance of target-only training, base model (no adaptation), and full fine-tuning across all participants.
+Table~\ref{tab:results} summarizes the performance comparison between base models and personalized models across all participants.
 
 \begin{table}[H]
 \centering
-\caption{Transfer learning strategy comparison - Target-Only vs Full Fine-Tuning}
+\caption{Transfer learning strategy comparison - b128\_aug\_patience50\_full\_fine\_tuning\_pct1.0\_20250929\_144626}
 \label{tab:results}
 \begin{tabular}{@{}lcccc@{}}
 \toprule
 Participant & Target-Only & Base Model & Full FT & Best Method \\
 \midrule
-asfik & 0.898 & 0.882 & 0.918 & Full FT \\
-ejaz & 0.865 & 0.895 & 0.889 & Base Model \\
-tonmoy & 0.833 & 0.719 & 0.861 & Full FT \\
+asfik & [TBD] & 0.867 & 0.862 & Base Model \\
+ejaz & [TBD] & 0.908 & 0.893 & Base Model \\
+tonmoy & [TBD] & 0.696 & 0.857 & Full FT \\
 \midrule
-Mean & 0.866 & 0.832 & 0.889 & - \\
+Mean & [TBD] & 0.824 & 0.871 & - \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+The results show that full fine-tuning achieved a mean test set F1-score improvement of +0.047 (relative improvement: +5.7\%, room captured: +10.8\%) over the base model. 1 out of 3 participants (33\%) showed improvements with personalization. All reported F1 scores are computed on held-out test sets that were never used for training or hyperparameter selection.
 
 \subsection{Detailed Performance Analysis}
 
 \begin{table}[H]
 \centering
-\caption{Detailed performance comparison - Detailed Comparison}
+\caption{Detailed performance metrics - b128\_aug\_patience50\_full\_fine\_tuning\_pct1.0\_20250929\_144626}
 \label{tab:detailed_results}
 \begin{tabular}{@{}lccccc@{}}
 \toprule
-Participant & Target-Only & Base Model & Full FT & Target vs Base & Full FT vs Base \\
+Participant & Base F1 & Full FT F1 & $\Delta$F1 & Rel. \% & Room \% \\
 \midrule
-asfik & 0.898 & 0.882 & 0.918 & +0.016 & +0.036 \\
-ejaz & 0.865 & 0.895 & 0.889 & -0.029 & -0.006 \\
-tonmoy & 0.833 & 0.719 & 0.861 & +0.114 & +0.143 \\
+asfik & 0.867 & 0.862 & -0.005 & -0.6\% & -3.8\% \\
+ejaz & 0.908 & 0.893 & -0.015 & -1.7\% & -16.7\% \\
+tonmoy & 0.696 & 0.857 & +0.161 & +23.2\% & +52.9\% \\
+\midrule
+Mean & 0.824 & 0.871 & +0.047 & +5.7\% & +10.8\% \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Performance Summary}
+\subsection{Individual Variability}
 
-The results demonstrate the effectiveness of different transfer learning approaches:
+The results reveal significant individual variability in the effectiveness of personalization:
 
 \begin{itemize}
-    \item \textbf{Target-Only vs Base Model}: Mean improvement of +0.034 F1 points
-    \item \textbf{Full Fine-Tuning vs Base Model}: Mean improvement of +0.057 F1 points
-    \item \textbf{Full Fine-Tuning vs Target-Only}: Mean improvement of +0.024 F1 points
-    \item \textbf{Success Rate}: Full fine-tuning outperformed target-only for 3/3 participants (100\%)
+    \item \textbf{Strong responders}: tonmoy (rel: +23.2\%, room: +52.9\%) showed substantial improvements
+    \item \textbf{Non-responders/Negative responders}: ejaz (rel: -1.7\%, room: -16.7\%), asfik (rel: -0.6\%, room: -3.8\%) showed little to no improvement or decreased performance
 \end{itemize}
 
-These results highlight the value of transfer learning, with full fine-tuning providing the best performance by leveraging both population-level knowledge and individual adaptation.
+\subsection{Training Dynamics}
+
+\begin{table}[H]
+\centering
+\caption{Training dynamics analysis - b128\_aug\_patience50\_full\_fine\_tuning\_pct1.0\_20250929\_144626}
+\label{tab:training_dynamics}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Participant & Transition Epoch & Best Base Epoch & Best Target Epoch \\
+\midrule
+asfik & 171 & 159 & 313 \\
+ejaz & 152 & 93 & 154 \\
+tonmoy & 135 & 87 & 150 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Analysis of the training metrics reveals interesting patterns:
+\begin{itemize}
+    \item Transition epochs (when fine-tuning began) varied across participants
+    \item Best target validation F1 scores were consistently achieved after the transition epoch
+    \item Mean improvement of 0.047 F1 points demonstrates practical value of personalization
+    \item Individual variability suggests selective personalization strategies may be beneficial
+\end{itemize}
