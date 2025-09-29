@@ -3,8 +3,8 @@
 # Dataset Configuration
 dataset:
   fs: 50  # Sampling frequency (Hz)
-  window_size_seconds: 60  # Window size in seconds
-  window_stride_seconds: 30  # Window stride in seconds
+  window_size_seconds: 10  # Window size in seconds
+  window_stride_seconds: 10  # Window stride in seconds
   labeling: "andrew smoking labels"  # Label type to use
   test_size: 0.2  # Train/test split ratio
 
@@ -68,14 +68,14 @@ training:
   
 # Participants Configuration
 participants:
-  # - "tonmoy"
-  # - "asfik"
-  # - "ejaz"
+  - "tonmoy"
+  - "asfik"
+  - "ejaz"
   # - "alsaad"
   # - "anam"
   # - "iftakhar"
   # - "unk1"
-  - "dennis"
+  # - "dennis"
 
 # Visualization Configuration
 visualization:

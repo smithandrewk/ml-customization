@@ -13,7 +13,7 @@ argparser = argparse.ArgumentParser()
 argparser.add_argument('--fold', type=int, required=True, help='Fold index for leave-one-participant-out cross-validation')
 argparser.add_argument('--device', type=int, required=True, default=0, help='GPU device index')
 argparser.add_argument('-b','--batch_size', type=int, required=True, default=64, help='batch size')
-argparser.add_argument('--model', type=str, default='medium', choices=['simple', 'medium', 'full'],
+argparser.add_argument('--model', type=str, default='medium', choices=['simple', 'medium', 'full', 'test'],
                       help='Model architecture: simple (SimpleSmokingCNN), medium (MediumSmokingCNN), full (SmokingCNN)')
 argparser.add_argument('--use_augmentation', action='store_true', help='Enable data augmentation')
 argparser.add_argument('--jitter_std', type=float, default=0.005, help='Standard deviation for jitter noise')
@@ -34,7 +34,8 @@ hyperparameters = {
     'early_stopping_patience': args.early_stopping_patience,
     'early_stopping_patience_target': args.early_stopping_patience_target,
     'window_size': 3000,
-    'participants': ['alsaad','anam','asfik','ejaz','iftakhar','tonmoy','unk1','dennis'],
+    'participants': ['tonmoy','asfik','ejaz'],
+    # 'participants': ['tonmoy','alsaad','anam','asfik','ejaz','iftakhar','unk1','dennis'],
     'experiment_prefix': args.prefix + f'_{args.mode}',
     'target_participant': None,  # to be set later
     'data_path': 'data/001_test',
@@ -100,6 +101,63 @@ elif model_type == 'medium':
     model = MediumSmokingCNN(window_size=window_size, num_features=6)
 elif model_type == 'full':
     model = SmokingCNN(window_size=window_size, num_features=6)
+elif model_type == 'test':
+    class ConvLayerNorm(nn.Module):
+        # might actually be instance norm haha jun19
+        
+        def __init__(self, out_channels) -> None:
+            super(ConvLayerNorm,self).__init__()
+            self.ln = nn.LayerNorm(out_channels, elementwise_affine=False)
+
+        def forward(self,x):
+            x = x.permute(0, 2, 1)
+            x = self.ln(x)
+            x = x.permute(0, 2, 1)
+            return x
+
+    class Block(nn.Module):
+        def __init__(self, in_channels, out_channels, kernel_size=3, padding=1, pool_size=2, pool=True) -> None:
+            super(Block,self).__init__()
+            self.pool = pool
+            self.conv = nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)
+            self.ln = ConvLayerNorm(out_channels)
+            if self.pool:
+                self.pool = nn.MaxPool1d(pool_size)
+
+        def forward(self,x):
+            x = self.conv(x)
+            x = self.ln(x)
+            x = torch.relu(x)
+            if self.pool:
+                x = self.pool(x)
+            return x
+    class TestModel(nn.Module):
+        def __init__(self):
+            super(TestModel, self).__init__()
+            self.blocks = []
+            self.blocks.append(Block(6,8))
+            for _ in range(5):
+                self.blocks.append(Block(8,8))
+                self.blocks.append(Block(8,8,pool=False))
+
+            self.blocks.append(Block(8,16,pool=False))
+
+            for _ in range(5):
+                self.blocks.append(Block(16,16))
+                self.blocks.append(Block(16,16,pool=False))
+                
+            self.blocks = nn.ModuleList(self.blocks)
+            self.gap = nn.AdaptiveAvgPool1d(1)
+            self.fc = nn.Linear(16, 1)
+        
+        def forward(self, x):
+            for block in self.blocks:
+                x = block(x)
+            
+            x = self.gap(x).squeeze(-1)
+            x = self.fc(x)
+            return x
+    model = TestModel()
 else:
     raise ValueError(f"Invalid model type: {model_type}. Choose from 'simple', 'medium', 'full'")
 criterion = nn.BCEWithLogitsLoss()
@@ -155,6 +213,8 @@ phase = 'base'
 while True:
     start_time = time()
     model.train()
+    if epoch >= 30 and phase == 'base':
+        patience_counter = 40
     train_loss, train_f1 = optimize_model_compute_loss_and_f1(model, trainloader, optimizer, criterion, device=device, augmenter=augmenter)
 
     lossi['base train loss'].append(train_loss)
@@ -172,8 +232,12 @@ while True:
     lossi['target val loss'].append(loss)
     lossi['target val f1'].append(f1)
 
-    if lossi[f'{phase} val loss'][-1] < best_val_loss:
-        best_val_loss = lossi[f'{phase} val loss'][-1]
+    # For generic mode, use target val loss for early stopping; otherwise use phase-specific val loss
+    val_loss_key = 'target val loss' if hyperparameters['mode'] == 'generic' else f'{phase} val loss'
+    val_f1_key = 'target val f1' if hyperparameters['mode'] == 'generic' else f'{phase} val f1'
+
+    if lossi[val_loss_key][-1] < best_val_loss:
+        best_val_loss = lossi[val_loss_key][-1]
         metrics[f'best_{phase}_val_loss'] = best_val_loss
         metrics[f'best_{phase}_val_loss_epoch'] = epoch
         torch.save(model.state_dict(), f'{new_exp_dir}/best_{phase}_model.pt')
@@ -181,8 +245,8 @@ while True:
     else:
         patience_counter += 1
 
-    if lossi[f'{phase} val f1'][-1] > (metrics[f'best_{phase}_val_f1'] or 0):
-        metrics[f'best_{phase}_val_f1'] = lossi[f'{phase} val f1'][-1]
+    if lossi[val_f1_key][-1] > (metrics[f'best_{phase}_val_f1'] or 0):
+        metrics[f'best_{phase}_val_f1'] = lossi[val_f1_key][-1]
         metrics[f'best_{phase}_val_f1_epoch'] = epoch
 
     if patience_counter >= hyperparameters['early_stopping_patience' if phase == 'base' else 'early_stopping_patience_target']:
@@ -222,7 +286,7 @@ while True:
                 json.dump(hyperparameters, f, indent=4)
             break
 
-    plt.figure(figsize=(7.2,4.48))
+    plt.figure(figsize=(7.2,4.48),dpi=300)
     plt.plot(lossi['base train loss'], label='Train Loss (base)', color='b')
     plt.plot(lossi['base val loss'], label='Val Loss (base)', color='b', linestyle='--')
     plt.plot(lossi['target train loss'], label='Train Loss (target)', color='g')
@@ -248,7 +312,7 @@ while True:
     plt.savefig(f'{new_exp_dir}/loss.jpg', bbox_inches='tight')
     plt.close()
 
-    plt.figure(figsize=(7.2,4.48))
+    plt.figure(figsize=(7.2,4.48),dpi=300)
     plt.plot(lossi['base train f1'], label='Train f1 (base)', color='b')
     plt.plot(lossi['base val f1'], label='Val f1 (base)', color='b', linestyle='--')
     plt.plot(lossi['target train f1'], label='Train f1 (target)', color='g')
@@ -267,7 +331,7 @@ while True:
         plt.axvline(x=metrics['best_target_val_f1_epoch'], color='g', linestyle='--', alpha=0.4)
 
     plt.xlabel('Epoch')
-    plt.ylabel('Loss')
+    plt.ylabel('F1')
     plt.legend()
     plt.title(f'Patience Counter: {patience_counter}')
     plt.savefig(f'{new_exp_dir}/f1.jpg', bbox_inches='tight')
