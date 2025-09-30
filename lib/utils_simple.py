@@ -96,7 +96,7 @@ def compute_loss_and_f1(model, dataloader, criterion, device):
     y_true = torch.cat(y_true).cpu()
     y_pred = torch.cat(y_pred).cpu()
     f1 = f1_score(y_true, y_pred, average='macro')
-    return total_loss / count, f1.item()
+    return total_loss / count, float(f1)
 
 def optimize_model_and_compute_loss(model, dataloader, optimizer, criterion, device, log=False):
     model.train()
@@ -143,7 +143,7 @@ def optimize_model_compute_loss_and_f1(model, dataloader, optimizer, criterion, 
     y_pred = torch.cat(y_pred).cpu().detach()
     f1 = f1_score(y_true, y_pred, average='macro')
     # f1 = (2 * (y_true * y_pred).sum()) / ((y_true + y_pred).sum() + 1e-8)
-    return total_loss / count, f1.item()
+    return total_loss / count, float(f1)
 
 def evaluate(model, dataloader, device):
     y_pred = []
