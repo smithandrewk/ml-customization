@@ -75,6 +75,8 @@ def compute_loss(model, dataloader, criterion, device, log=False):
         return math.log(total_loss / count)
     return total_loss / count
 
+from sklearn.metrics import f1_score
+
 def compute_loss_and_f1(model, dataloader, criterion, device):
     model.eval()
     total_loss = 0.0
@@ -93,7 +95,7 @@ def compute_loss_and_f1(model, dataloader, criterion, device):
             y_pred.append(logits.sigmoid().round().cpu())
     y_true = torch.cat(y_true).cpu()
     y_pred = torch.cat(y_pred).cpu()
-    f1 = (2 * (y_true * y_pred).sum()) / ((y_true + y_pred).sum() + 1e-8)
+    f1 = f1_score(y_true, y_pred, average='macro')
     return total_loss / count, f1.item()
 
 def optimize_model_and_compute_loss(model, dataloader, optimizer, criterion, device, log=False):
@@ -137,9 +139,10 @@ def optimize_model_compute_loss_and_f1(model, dataloader, optimizer, criterion, 
         count += Xi.size(0)
         y_true.append(yi.cpu())
         y_pred.append(logits.sigmoid().round().cpu())
-    y_true = torch.cat(y_true).cpu()
-    y_pred = torch.cat(y_pred).cpu()
-    f1 = (2 * (y_true * y_pred).sum()) / ((y_true + y_pred).sum() + 1e-8)
+    y_true = torch.cat(y_true).cpu().detach()
+    y_pred = torch.cat(y_pred).cpu().detach()
+    f1 = f1_score(y_true, y_pred, average='macro')
+    # f1 = (2 * (y_true * y_pred).sum()) / ((y_true + y_pred).sum() + 1e-8)
     return total_loss / count, f1.item()
 
 def evaluate(model, dataloader, device):
@@ -158,6 +161,7 @@ def evaluate(model, dataloader, device):
     print(classification_report(y_true, y_pred, target_names=['No Smoking', 'Smoking']))
     ConfusionMatrixDisplay.from_predictions(y_true, y_pred,normalize='true')
     ConfusionMatrixDisplay.from_predictions(y_true, y_pred,normalize='pred')
+    return y_true,y_pred
 
 class SimpleCNN(nn.Module):
     def __init__(self, *args, **kwargs):
