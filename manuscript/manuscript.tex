@@ -43,6 +43,53 @@ Recent advances in machine learning and the ubiquity of accelerometer-equipped w
 
 This paper investigates whether personalizing neural networks through fine-tuning can improve smoking detection accuracy compared to general population-level models. We hypothesize that individual behavioral signatures in accelerometer data can be better captured through personalized models, leading to improved detection performance.
 
+\section{Related Work}
+\label{sec:related_work}
+
+Our work builds on several interconnected research areas: digital health interventions for smoking cessation, sensor-based activity recognition, deep learning for time series classification, and transfer learning for personalized health applications. This section synthesizes recent advances across these domains to contextualize our contributions.
+
+\subsection{Digital Health Interventions for Smoking Cessation}
+
+Digital health technologies have emerged as promising tools for supporting smoking cessation efforts. Just-in-time adaptive interventions (JITAIs) represent a particularly innovative approach, delivering personalized support at moments when individuals are most likely to benefit~\cite{yang2022jitai}. Yang et al. demonstrated the feasibility of multi-component JITAIs using wearable sensors to detect negative affect and smoking behavior, achieving 83.7\% retention and 34\% biochemically-confirmed abstinence. However, their focus group studies revealed that successful JITAIs must balance ease of use with sufficient disruption and provide personalized, flexible support~\cite{leppin2025perspectives}.
+
+Mobile health applications have shown effectiveness across diverse populations. A systematic review of mobile phone-based interventions for young smokers found evidence supporting both SMS-based and app-based approaches~\cite{mobile2023interventions}, while meta-analyses confirm that e-health interventions represent cost-effective alternatives to traditional smoking cessation care~\cite{ehealth2024systematic}. Recent clinical trials have demonstrated the feasibility of integrating smartband-based smoking detection with real-time mindfulness interventions~\cite{smartband2024feasibility}, though adherence to intervention components remains challenging. Machine learning approaches have also been applied to predict smoking cessation outcomes and identify responders to digital behavioral interventions~\cite{ml2023prediction,behavioral2024activation}.
+
+\subsection{Smoking Detection Using Wearable Sensors}
+
+Automated smoking detection from wearable sensors has progressed significantly in recent years. A 2024 scoping review of 37 studies found that 16 used wearable bands and 15 employed multisensory systems, though no single device currently achieves consistently high accuracy~\cite{jmir2024sensors}. Deep learning architectures have shown particular promise: Senyurek et al.~\cite{senyurek2020cnn} developed a CNN-LSTM model for detecting smoking puffs using respiratory and IMU sensors, achieving 78\% F1-score in leave-one-subject-out cross-validation. Abo-Tabik et al.~\cite{abotabik2020smart} combined Control Theory with 1D-CNNs to predict smoking events from motion and geolocation data, achieving 86.6\% overall accuracy. Imtiaz et al.~\cite{smoking_realtime_2022} addressed real-time smoking detection using wrist-worn IMU sensors with multi-class classification to handle confounding activities.
+
+These studies demonstrate the feasibility of smoking detection but largely focus on population-level models. Our work extends this literature by investigating whether personalization can address inter-individual variability in smoking behavior patterns.
+
+\subsection{Deep Learning for Wearable Sensor Data}
+
+The application of deep learning to wearable sensor data has been comprehensively reviewed in recent surveys~\cite{wang2022deep,zhang2022deep_har,wang2019deep_HAR}. Convolutional neural networks have emerged as particularly effective for processing accelerometer time series~\cite{kiranyaz2021d}, with 1D CNNs demonstrating superior performance over traditional machine learning approaches for activity recognition~\cite{1d_cnn_har_2021}. Hybrid CNN-LSTM architectures combine spatial feature extraction with temporal modeling, achieving state-of-the-art results for motion sensor-based activity recognition~\cite{cnn_lstm_2023,ordóñez2016deep}.
+
+Architectural innovations have further improved performance. Dilated convolutions enable expanded receptive fields without increasing computational complexity~\cite{oord2016wavenet,dilated_multivariate_2019}, with applications to sensor-based human activity recognition~\cite{dilated_attention_2021}. Multi-head self-attention mechanisms can be integrated with dilated causal convolutions to accelerate training and improve recognition accuracy~\cite{dilated_attention_2021}. Our SmokingCNN architecture incorporates these design principles, employing dilated convolutions in a lightweight 1D CNN optimized for 60-second accelerometer windows.
+
+Recent work has also addressed practical deployment considerations. In-sensor computing approaches enable real-time pattern recognition with miniaturized machine learning algorithms~\cite{gait_analysis_2024}, while hybrid deep learning models have been developed for edge computing scenarios~\cite{student_activity_2024,singh2024hybrid}. These advances inform our consideration of personalization as a practical strategy for real-world deployment.
+
+\subsection{Transfer Learning and Personalization in Healthcare}
+
+Transfer learning has become essential for healthcare applications due to limited labeled data and privacy constraints~\cite{chato2023survey}. Comprehensive surveys demonstrate that transfer learning methods---including feature extraction, fine-tuning, domain adaptation, multitask learning, federated learning, and meta-learning---significantly improve model performance with limited healthcare data~\cite{pan2010survey,weiss2016survey}.
+
+Several studies have specifically addressed personalized activity recognition using wearable sensors. Fu et al.~\cite{fu2021personalized} developed the IPL-JPDA algorithm for cross-user activity recognition, achieving 93.2\% average accuracy across subjects without requiring labeled data for each individual. Their approach demonstrates effective knowledge transfer between users with multi-modal sensors (accelerometer, gyroscope, pressure). Cross-device transfer learning has also been explored, showing that pre-trained models can be effectively transferred across different accelerometer-based devices with domain adaptation techniques~\cite{liu2024cattle}.
+
+Few-shot learning and meta-learning approaches enable rapid adaptation to new users or medical tasks with limited training data~\cite{roy2024fewshot}. AI-enabled sensors can adapt to individual patterns over time through continuous learning~\cite{shah2023emergence}, while research on personalized language models demonstrates that fine-tuning can enable smaller models to outperform larger ones with less training data~\cite{hsieh2023distilling,howard2018universal}.
+
+Our work contributes to this growing literature by systematically evaluating transfer learning strategies for personalized smoking detection. Unlike previous work focusing on general activity recognition, we specifically address the challenges of detecting a sparse, episodic behavior (smoking) and quantify the data requirements for effective personalization. Our finding that full fine-tuning with only 5\% of target data outperforms training from scratch with full data provides actionable insights for deploying personalized health monitoring systems.
+
+\subsection{Time Series Classification for Biomedical Applications}
+
+Time series classification represents a fundamental challenge in biomedical applications. Systematic reviews have categorized TSC techniques including CNN, LSTM, and transformer-based approaches, analyzing preprocessing methods and evaluation metrics specific to health contexts~\cite{biomedical_tsc_2022}. Accelerometer data processing has been applied across diverse applications including gait analysis~\cite{gait_analysis_2024}, patient monitoring~\cite{patient_monitoring_2020}, and health status assessment~\cite{wpt_health_2024}.
+
+The broader application of deep learning to medical and health domains has been comprehensively reviewed~\cite{lecun2015deep,goodfellow2016deep,rajpurkar2022ai,esteva2021deep,topol2019high}, with particular attention to how AI enables personalized medicine. Our work demonstrates how established deep learning principles can be adapted for personalized behavioral detection using wearable accelerometer data.
+
+\subsection{Positioning of Our Contributions}
+
+While prior work has established the feasibility of smoking detection using wearable sensors and demonstrated the value of transfer learning for health applications, several gaps remain. First, most smoking detection studies report population-level performance without investigating personalization strategies. Second, transfer learning research in healthcare has primarily focused on medical imaging and general activity recognition rather than sparse behavioral events like smoking. Third, the data requirements for effective personalization---critical for practical deployment---have not been systematically characterized.
+
+Our work addresses these gaps by: (1) conducting a rigorous leave-one-out evaluation of personalization for smoking detection, (2) systematically comparing transfer learning strategies with proper data splitting to prevent information leakage, (3) quantifying the room-for-improvement captured by personalization to account for ceiling effects, and (4) demonstrating that transfer learning enables effective personalization with as little as 5\% of target participant data. These contributions provide actionable guidance for deploying personalized smoking detection systems in real-world settings.
+
 \section{Methods}
 \label{sec:methods}
 

@@ -51,7 +51,9 @@ if command -v pdflatex &> /dev/null; then
     echo "Compiling manuscript..."
     cd manuscript
     pdflatex manuscript.tex
-    pdflatex manuscript.tex  # Run twice for references
+    bibtex manuscript
+    pdflatex manuscript.tex
+    pdflatex manuscript.tex
     cd ..
     echo "Manuscript compiled successfully!"
 else
