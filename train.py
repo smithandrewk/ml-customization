@@ -35,8 +35,8 @@ hyperparameters = {
     'early_stopping_patience': args.early_stopping_patience,
     'early_stopping_patience_target': args.early_stopping_patience_target,
     'window_size': 3000,
-    'participants': ['tonmoy','asfik','ejaz'],
-    # 'participants': ['tonmoy','alsaad','anam','asfik','ejaz','iftakhar','unk1','dennis'],
+    # 'participants': ['tonmoy','asfik','ejaz'],
+    'participants': ['tonmoy','alsaad','anam','asfik','ejaz','iftakhar','unk1','dennis'],
     'experiment_prefix': args.prefix,
     'target_participant': None,  # to be set later
     'data_path': 'data/001_test',
