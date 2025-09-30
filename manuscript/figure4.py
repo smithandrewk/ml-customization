@@ -5,6 +5,10 @@ import numpy as np
 import seaborn as sns
 import pandas as pd
 import argparse
+import torch
+from torch import nn
+from torch.utils.data import DataLoader, TensorDataset
+from sklearn.metrics import f1_score
 
 # Configure matplotlib for high-quality vector graphics
 import matplotlib
@@ -15,6 +19,78 @@ parser = argparse.ArgumentParser(description='Generate Figure 4: Transfer Learni
 parser.add_argument('--experiment-prefix', type=str, default='b128_aug_patience50',
                    help='Experiment name prefix to filter experiments')
 args = parser.parse_args()
+
+# Model architecture (TestModel from eval.py)
+class ConvLayerNorm(nn.Module):
+    def __init__(self, out_channels) -> None:
+        super(ConvLayerNorm,self).__init__()
+        self.ln = nn.LayerNorm(out_channels, elementwise_affine=False)
+
+    def forward(self,x):
+        x = x.permute(0, 2, 1)
+        x = self.ln(x)
+        x = x.permute(0, 2, 1)
+        return x
+
+class Block(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=3, padding=1, pool_size=2, pool=True) -> None:
+        super(Block,self).__init__()
+        self.pool = pool
+        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)
+        self.ln = ConvLayerNorm(out_channels)
+        if self.pool:
+            self.pool = nn.MaxPool1d(pool_size)
+
+    def forward(self,x):
+        x = self.conv(x)
+        x = self.ln(x)
+        x = torch.relu(x)
+        if self.pool:
+            x = self.pool(x)
+        return x
+
+class TestModel(nn.Module):
+    def __init__(self):
+        super(TestModel, self).__init__()
+        self.blocks = []
+        self.blocks.append(Block(6,8))
+        for _ in range(5):
+            self.blocks.append(Block(8,8))
+            self.blocks.append(Block(8,8,pool=False))
+
+        self.blocks.append(Block(8,16,pool=False))
+        self.blocks = nn.ModuleList(self.blocks)
+        self.gap = nn.AdaptiveAvgPool1d(1)
+        self.fc = nn.Linear(16, 1)
+
+    def forward(self, x):
+        for block in self.blocks:
+            x = block(x)
+        x = self.gap(x).squeeze(-1)
+        x = self.fc(x)
+        return x
+
+def compute_loss_and_f1(model, dataloader, criterion, device):
+    """Compute loss and F1 score on a dataset"""
+    model.eval()
+    total_loss = 0.0
+    count = 0
+    y_true = []
+    y_pred = []
+    with torch.no_grad():
+        for Xi, yi in dataloader:
+            Xi = Xi.to(device)
+            yi = yi.to(device).float()
+            logits = model(Xi).squeeze()
+            loss = criterion(logits, yi)
+            total_loss += loss.item() * Xi.size(0)
+            count += Xi.size(0)
+            y_true.append(yi.cpu())
+            y_pred.append(logits.sigmoid().round().cpu())
+    y_true = torch.cat(y_true).cpu()
+    y_pred = torch.cat(y_pred).cpu()
+    f1 = f1_score(y_true, y_pred, average='macro')
+    return total_loss / count, f1.item()
 
 # Set Nature-style publication parameters
 plt.rcParams.update({
@@ -69,22 +145,41 @@ for experiment in os.listdir(experiment_dir):
         run_path = f'{exp_path}/{run}'
         metrics_file = f'{run_path}/metrics.json'
         losses_file = f'{run_path}/losses.json'
+        hyperparameters_file = f'{run_path}/hyperparameters.json'
 
-        if not os.path.exists(metrics_file) or not os.path.exists(losses_file):
+        if not os.path.exists(metrics_file) or not os.path.exists(losses_file) or not os.path.exists(hyperparameters_file):
             continue
 
         metrics = json.load(open(metrics_file))
         losses = json.load(open(losses_file))
+        hyperparameters = json.load(open(hyperparameters_file))
 
-        # Use test set metrics for unbiased evaluation
+        # Compute test set metrics directly for unbiased evaluation
+        fold = hyperparameters['fold']
+        participants = hyperparameters.get('participants', ['alsaad','anam','asfik','ejaz','iftakhar','tonmoy','unk1','dennis'])
+        target_participant = participants[fold] if fold < len(participants) else f'fold_{fold}'
+        data_path = hyperparameters['data_path']
+
+        target_testloader = DataLoader(
+            TensorDataset(*torch.load(f'{data_path}/{target_participant}_test.pt')),
+            batch_size=128, shuffle=False
+        )
+
+        model = TestModel()
+        criterion = nn.BCEWithLogitsLoss()
+
         if 'target_only' in experiment:
             # For target-only, the base model IS the target model (trained only on target data)
-            target_model_on_target_test_f1 = metrics.get('base_test_f1', losses['target val f1'][metrics['best_base_val_loss_epoch']])
             base_model_on_target_test_f1 = None
+            model.load_state_dict(torch.load(f'{run_path}/best_base_model.pt', map_location='cpu'))
+            _, target_model_on_target_test_f1 = compute_loss_and_f1(model, target_testloader, criterion, device='cpu')
         else:
-            # For transfer learning (full fine-tuning), use test metrics
-            target_model_on_target_test_f1 = metrics.get('test_f1', losses['target val f1'][metrics.get('best_target_val_loss_epoch', -1)])
-            base_model_on_target_test_f1 = metrics.get('base_test_f1', losses['target val f1'][metrics.get('best_base_val_loss_epoch', -1)])
+            # For transfer learning (full fine-tuning), compute test metrics
+            model.load_state_dict(torch.load(f'{run_path}/best_base_model.pt', map_location='cpu'))
+            _, base_model_on_target_test_f1 = compute_loss_and_f1(model, target_testloader, criterion, device='cpu')
+
+            model.load_state_dict(torch.load(f'{run_path}/best_target_model.pt', map_location='cpu'))
+            _, target_model_on_target_test_f1 = compute_loss_and_f1(model, target_testloader, criterion, device='cpu')
 
         base_f1s.append(base_model_on_target_test_f1)
         target_f1s.append(target_model_on_target_test_f1)

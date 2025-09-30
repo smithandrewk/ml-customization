@@ -3,6 +3,9 @@ patience=40
 lr=3e-4
 mode="target_only" # 'full_fine_tuning', 'last_layer_only', 'generic', 'target_only'
 target_data_pct=0.05  # Percentage of target training data to use (0.25, 0.5, 0.75, 1.0)
+participants=("tonmoy" "asfik" "ejaz")  # List of participants for cross-validation
+window_size=3000  # Window size in samples (3000 = 60s at 50Hz)
+data_path="data/001_test"  # Path to dataset directory
 timestamp=$(date +%Y%m%d_%H%M%S)
 prefix="b${batch_size}_aug_patience${patience}_${mode}_pct${target_data_pct}_${timestamp}"
 
@@ -20,7 +23,10 @@ do
         --early_stopping_patience_target $patience \
         --mode $mode \
         --lr $lr \
-        --target_data_pct $target_data_pct
+        --target_data_pct $target_data_pct \
+        --participants "${participants[@]}" \
+        --window_size $window_size \
+        --data_path $data_path
 done
 
 # scp -r experiments/${prefix} 10.173.98.188:~/ml-customization/experiments/

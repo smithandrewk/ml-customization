@@ -156,7 +156,7 @@ Aaron van~den Oord, Sander Dieleman, Heiga Zen, Karen Simonyan, Oriol Vinyals,
 \newblock Wavenet: A generative model for raw audio.
 \newblock {\em arXiv preprint arXiv:1609.03499}, 2016.
 
-\bibitem{ordóñez2016deep}
+\bibitem{ordonez2016deep}
 Francisco~Javier Ord{\'o}{\~n}ez and Daniel Roggen.
 \newblock Deep convolutional and lstm recurrent neural networks for multimodal
   wearable activity recognition.

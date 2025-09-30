@@ -6,6 +6,76 @@ import math
 from torch.nn.functional import relu
 import os
 
+class EarlyStopper:
+    def __init__(self, patience=50, min_delta=0.0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.best_loss = float('inf')
+
+    def step(self, val_loss):
+        if val_loss < self.best_loss - self.min_delta:
+            self.best_loss = val_loss
+            self.counter = 0
+            return False  # Don't stop
+        else:
+            self.counter += 1
+            return self.counter >= self.patience  # Stop if patience exceeded
+    
+def plot_loss_and_f1(lossi, new_exp_dir, metrics, patience_counter):
+    plt.figure(figsize=(7.2,4.48),dpi=300)
+    plt.plot(lossi['base train loss'], label='Train Loss (base)', color='b')
+    plt.plot(lossi['base val loss'], label='Val Loss (base)', color='b', linestyle='--')
+    plt.plot(lossi['target train loss'], label='Train Loss (target)', color='g')
+    plt.plot(lossi['target val loss'], label='Val Loss (target)', color='g', linestyle='--')
+
+    if metrics['transition_epoch'] is not None:
+        plt.axvline(x=metrics['transition_epoch'], color='r', linestyle='--', label='Phase Transition')
+
+    if metrics['best_base_val_loss_epoch'] is not None and metrics['best_base_val_loss'] is not None:
+        plt.axhline(y=metrics['best_base_val_loss'], color='b', linestyle='--', label='Best Base Val Loss', alpha=0.5)
+        plt.axvline(x=metrics['best_base_val_loss_epoch'], color='b', linestyle='--', alpha=0.5)
+        plt.axhline(y=lossi['target val loss'][metrics['best_base_val_loss_epoch']], color='g', linestyle='--', label='Best Base Val Loss', alpha=0.5)
+
+    if metrics['best_target_val_loss_epoch'] is not None and metrics['best_target_val_loss'] is not None:
+        plt.axhline(y=metrics['best_target_val_loss'], color='g', linestyle='--', label='Best target Val Loss', alpha=0.8)
+        plt.axvline(x=metrics['best_target_val_loss_epoch'], color='g', linestyle='--', alpha=0.4)
+
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.yscale('log')
+    plt.title(f'Patience Counter: {patience_counter}')
+    plt.savefig(f'{new_exp_dir}/loss.jpg', bbox_inches='tight')
+    plt.savefig(f'loss.jpg', bbox_inches='tight')
+    plt.close()
+
+    plt.figure(figsize=(7.2,4.48),dpi=300)
+    plt.plot(lossi['base train f1'], label='Train f1 (base)', color='b')
+    plt.plot(lossi['base val f1'], label='Val f1 (base)', color='b', linestyle='--')
+    plt.plot(lossi['target train f1'], label='Train f1 (target)', color='g')
+    plt.plot(lossi['target val f1'], label='Val f1 (target)', color='g', linestyle='--')
+
+    if metrics['transition_epoch'] is not None:
+        plt.axvline(x=metrics['transition_epoch'], color='r', linestyle='--', label='Phase Transition')
+
+    if metrics['best_base_val_f1_epoch'] is not None and metrics['best_base_val_f1'] is not None:
+        plt.axhline(y=metrics['best_base_val_f1'], color='b', linestyle='--', label='Best Base f1 Loss', alpha=0.5)
+        plt.axvline(x=metrics['best_base_val_f1_epoch'], color='b', linestyle='--', alpha=0.5)
+        plt.axhline(y=lossi['target val f1'][metrics['best_base_val_f1_epoch']], color='g', linestyle='--', label='Best Base Val Loss', alpha=0.5)
+
+    if metrics['best_target_val_f1_epoch'] is not None and metrics['best_target_val_f1'] is not None:
+        plt.axhline(y=metrics['best_target_val_f1'], color='g', linestyle='--', label='Best target f1 Loss', alpha=0.8)
+        plt.axvline(x=metrics['best_target_val_f1_epoch'], color='g', linestyle='--', alpha=0.4)
+
+    plt.xlabel('Epoch')
+    plt.ylabel('F1')
+    plt.legend()
+    plt.title(f'Patience Counter: {patience_counter}')
+    plt.savefig(f'{new_exp_dir}/f1.jpg', bbox_inches='tight')
+    plt.savefig(f'f1.jpg', bbox_inches='tight')
+    plt.close()
+
 def create_and_get_new_exp_dir(prefix='exp'):
     # Create experiments directory if it doesn't exist
     base_exp_dir = f'experiments/{prefix}'
@@ -87,7 +157,7 @@ def compute_loss_and_f1(model, dataloader, criterion, device):
         for Xi, yi in dataloader:
             Xi = Xi.to(device)
             yi = yi.to(device).float()
-            logits = model(Xi).squeeze()
+            logits = model(Xi).squeeze(-1)
             loss = criterion(logits, yi)
             total_loss += loss.item() * Xi.size(0)
             count += Xi.size(0)

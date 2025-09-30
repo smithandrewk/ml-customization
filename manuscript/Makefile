@@ -2,9 +2,9 @@
 # Usage: make pdf EXPERIMENT=<experiment_name>
 
 # Default experiments (can be overridden)
-EXPERIMENT ?= b128_aug_patience5_full_fine_tuning_20250929_112221
-TARGET_ONLY_EXP ?= b128_aug_patience5_target_only_20250929_122050
-FULL_FT_EXP ?= b128_aug_patience5_full_fine_tuning_20250929_112221
+EXPERIMENT ?= b512_aug_patience25_full_fine_tuning_pct1.0_20250930_085838
+TARGET_ONLY_EXP ?= b512_aug_patience25_target_only_pct1.0_20250930_085817
+FULL_FT_EXP ?= b512_aug_patience25_full_fine_tuning_pct1.0_20250930_085838
 
 # LaTeX compiler
 LATEX = pdflatex

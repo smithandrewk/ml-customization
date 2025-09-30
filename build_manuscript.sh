@@ -8,32 +8,32 @@ mkdir -p figures
 
 # Generate all figures
 echo "Generating Figure 1: Study Design and Methodology..."
-python3 figure1.py
+python3 manuscript/figure1.py
 
 echo "Generating Figure 2: Main Results..."
 # Use full fine-tuning with 100% target data for main results
 EXPERIMENT=$(ls -d experiments/*full_fine_tuning_pct1.0*/ 2>/dev/null | head -n 1 | xargs basename)
 if [ -n "$EXPERIMENT" ] && [ -d "experiments/$EXPERIMENT" ]; then
-    python3 figure2.py --experiment "$EXPERIMENT"
+    python3 manuscript/figure2.py --experiment "$EXPERIMENT"
     echo "Using experiment: $EXPERIMENT"
 else
     echo "Warning: full_fine_tuning_pct1.0 experiment not found. Generating demo figures..."
     # Create a mock experiment for demo purposes
     EXPERIMENT="demo"
-    python3 figure2.py --experiment "$EXPERIMENT" 2>/dev/null || python3 figure2.py
+    python3 manuscript/figure2.py --experiment "$EXPERIMENT" 2>/dev/null || python3 manuscript/figure2.py
 fi
 
 echo "Generating Figure 3: Training Dynamics..."
 # Use same experiment as Figure 2 (full fine-tuning with 100% target data)
 if [ -n "$EXPERIMENT" ] && [ -d "experiments/$EXPERIMENT" ]; then
-    python3 figure3.py --experiment "$EXPERIMENT"
+    python3 manuscript/figure3.py --experiment "$EXPERIMENT"
 else
     echo "Warning: No experiment data found. Generating demo figures..."
-    python3 figure3.py --experiment "$EXPERIMENT" 2>/dev/null || python3 figure3.py
+    python3 manuscript/figure3.py --experiment "$EXPERIMENT" 2>/dev/null || python3 manuscript/figure3.py
 fi
 
 echo "Generating Figure 4: Transfer Learning Data Efficiency..."
-python3 figure4.py
+python3 manuscript/figure4.py
 
 # Create generic figure2.pdf and figure3.pdf links for the manuscript
 if [ -f "figures/figure2_${EXPERIMENT}.pdf" ]; then

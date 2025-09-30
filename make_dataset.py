@@ -35,7 +35,7 @@ def get_next_dataset_dir(name):
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Create participant-specific smoking detection dataset')
-parser.add_argument('--config', type=str, default='configs/config.yaml', help='Path to config file')
+parser.add_argument('--config', type=str, default='configs/dataset_config.yaml', help='Path to config file')
 parser.add_argument('--name', type=str, required=True, help='Dataset name (will be prefixed with auto-incrementing number)')
 args = parser.parse_args()
 
