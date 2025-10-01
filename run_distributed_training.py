@@ -169,17 +169,14 @@ class GPUWorker(threading.Thread):
             Local path where results were copied, or None if failed
         """
         # Determine the experiment directory path
+        # Note: prefix already has the hash appended in execute_job
         prefix = job_config.get('prefix', 'alpha')
         fold = job_config['fold']
         participants = job_config.get('participants', ['tonmoy', 'asfik', 'ejaz'])
         target_participant = participants[fold]
 
-        # Add config hash to make path unique
-        config_hash = hash_config(job_config)
-        exp_name = f"{prefix}_{config_hash}"
-
-        remote_exp_dir = f"~/ml-customization/experiments/{exp_name}/fold{fold}_{target_participant}"
-        local_exp_dir = f"experiments/{exp_name}/fold{fold}_{target_participant}"
+        remote_exp_dir = f"~/ml-customization/experiments/{prefix}/fold{fold}_{target_participant}"
+        local_exp_dir = f"experiments/{prefix}/fold{fold}_{target_participant}"
 
         # First, verify the directory exists on remote
         ssh_check_cmd = ["ssh", "-o", "StrictHostKeyChecking=no"]
@@ -219,7 +216,7 @@ class GPUWorker(threading.Thread):
         try:
             # Create local experiments directory if needed
             import os
-            os.makedirs(f"experiments/{exp_name}", exist_ok=True)
+            os.makedirs(f"experiments/{prefix}", exist_ok=True)
 
             # Copy files
             result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=300)

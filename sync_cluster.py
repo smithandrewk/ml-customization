@@ -118,7 +118,17 @@ def sync_cluster(cluster_config_path: str, clean_experiments: bool = False,
 
         # Git pull
         if git_pull:
-            # First try regular git pull
+            # First checkout feature/distributed-training branch
+            checkout_cmd = f"{base_cmd} && git fetch origin && git checkout feature/distributed-training"
+            returncode, stdout, stderr = run_command_on_server(server, checkout_cmd, verbose)
+
+            if returncode == 0:
+                print(f"[{host_string}] ✓ Checked out feature/distributed-training")
+            else:
+                print(f"[{host_string}] ✗ Failed to checkout branch - continuing anyway")
+                print(f"[{host_string}] ⚠ Warning: May be on wrong branch")
+
+            # Now pull latest changes
             git_cmd = f"{base_cmd} && git pull"
             returncode, stdout, stderr = run_command_on_server(server, git_cmd, verbose)
 
@@ -128,24 +138,15 @@ def sync_cluster(cluster_config_path: str, clean_experiments: bool = False,
                 # If git pull fails, try to fetch and reset to origin
                 print(f"[{host_string}] Regular git pull failed, trying fetch and reset...")
 
-                # Get current branch name
-                branch_cmd = f"{base_cmd} && git branch --show-current"
-                returncode, branch_out, _ = run_command_on_server(server, branch_cmd, verbose=False)
+                # Fetch and reset to feature/distributed-training
+                reset_cmd = f"{base_cmd} && git fetch origin && git reset --hard origin/feature/distributed-training"
+                returncode, stdout, stderr = run_command_on_server(server, reset_cmd, verbose)
 
-                if returncode == 0 and branch_out.strip():
-                    branch = branch_out.strip()
-                    # Fetch and reset
-                    reset_cmd = f"{base_cmd} && git fetch origin && git reset --hard origin/{branch}"
-                    returncode, stdout, stderr = run_command_on_server(server, reset_cmd, verbose)
-
-                    if returncode == 0:
-                        print(f"[{host_string}] ✓ Git fetch and reset successful")
-                    else:
-                        print(f"[{host_string}] ✗ Git sync failed - continuing anyway")
-                        # Don't fail completely, just warn
-                        print(f"[{host_string}] ⚠ Warning: Code may be out of sync")
+                if returncode == 0:
+                    print(f"[{host_string}] ✓ Git fetch and reset successful")
                 else:
-                    print(f"[{host_string}] ✗ Could not determine branch - continuing anyway")
+                    print(f"[{host_string}] ✗ Git sync failed - continuing anyway")
+                    # Don't fail completely, just warn
                     print(f"[{host_string}] ⚠ Warning: Code may be out of sync")
 
         # Clean experiments directory
