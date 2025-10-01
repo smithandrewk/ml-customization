@@ -35,7 +35,8 @@ def plot_loss_and_f1(lossi, new_exp_dir, metrics, patience_counter):
     if metrics['best_base_val_loss_epoch'] is not None and metrics['best_base_val_loss'] is not None:
         plt.axhline(y=metrics['best_base_val_loss'], color='b', linestyle='--', label='Best Base Val Loss', alpha=0.5)
         plt.axvline(x=metrics['best_base_val_loss_epoch'], color='b', linestyle='--', alpha=0.5)
-        plt.axhline(y=lossi['target val loss'][metrics['best_base_val_loss_epoch']], color='g', linestyle='--', label='Best Base Val Loss', alpha=0.5)
+        if metrics['best_base_val_loss_epoch'] < len(lossi['target val loss']) and lossi['target val loss'][metrics['best_base_val_loss_epoch']] is not None:
+            plt.axhline(y=lossi['target val loss'][metrics['best_base_val_loss_epoch']], color='g', linestyle='--', label='Best Base Val Loss', alpha=0.5)
 
     if metrics['best_target_val_loss_epoch'] is not None and metrics['best_target_val_loss'] is not None:
         plt.axhline(y=metrics['best_target_val_loss'], color='g', linestyle='--', label='Best target Val Loss', alpha=0.8)
@@ -62,7 +63,8 @@ def plot_loss_and_f1(lossi, new_exp_dir, metrics, patience_counter):
     if metrics['best_base_val_f1_epoch'] is not None and metrics['best_base_val_f1'] is not None:
         plt.axhline(y=metrics['best_base_val_f1'], color='b', linestyle='--', label='Best Base f1 Loss', alpha=0.5)
         plt.axvline(x=metrics['best_base_val_f1_epoch'], color='b', linestyle='--', alpha=0.5)
-        plt.axhline(y=lossi['target val f1'][metrics['best_base_val_f1_epoch']], color='g', linestyle='--', label='Best Base Val Loss', alpha=0.5)
+        if metrics['best_base_val_f1_epoch'] < len(lossi['target val f1']) and lossi['target val f1'][metrics['best_base_val_f1_epoch']] is not None:
+            plt.axhline(y=lossi['target val f1'][metrics['best_base_val_f1_epoch']], color='g', linestyle='--', label='Best Base Val Loss', alpha=0.5)
 
     if metrics['best_target_val_f1_epoch'] is not None and metrics['best_target_val_f1'] is not None:
         plt.axhline(y=metrics['best_target_val_f1'], color='g', linestyle='--', label='Best target f1 Loss', alpha=0.8)
@@ -115,7 +117,8 @@ def plot_loss(patience_counter, lossi, evalloaders, metrics, exp_dir):
     if metrics['best_base_val_loss_epoch'] is not None and metrics['best_base_val_loss'] is not None:
         plt.axhline(y=metrics['best_base_val_loss'], color='b', linestyle='--', label='Best Base Val Loss', alpha=0.5)
         plt.axvline(x=metrics['best_base_val_loss_epoch'], color='b', linestyle='--', alpha=0.5)
-        plt.axhline(y=lossi['target val loss'][metrics['best_base_val_loss_epoch']], color='g', linestyle='--', label='Best Base Val Loss', alpha=0.5)
+        if metrics['best_base_val_loss_epoch'] < len(lossi['target val loss']) and lossi['target val loss'][metrics['best_base_val_loss_epoch']] is not None:
+            plt.axhline(y=lossi['target val loss'][metrics['best_base_val_loss_epoch']], color='g', linestyle='--', label='Best Base Val Loss', alpha=0.5)
 
     if metrics['best_target_val_loss_epoch'] is not None and metrics['best_target_val_loss'] is not None:
         plt.axhline(y=metrics['best_target_val_loss'], color='g', linestyle='--', label='Best target Val Loss', alpha=0.5)

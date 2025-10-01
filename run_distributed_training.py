@@ -9,6 +9,7 @@ import subprocess
 import sys
 import json
 import time
+import os
 from typing import List, Optional, Dict
 from datetime import datetime
 import threading
@@ -65,19 +66,25 @@ class GPUWorker(threading.Thread):
     def run(self):
         """Process jobs from the queue."""
         while True:
+            job = None
             try:
                 job = self.job_queue.get(timeout=1)
                 if job is None:  # Poison pill to stop thread
+                    self.job_queue.task_done()
                     break
 
                 job_id, job_config = job
                 self.execute_job(job_id, job_config)
+                self.job_queue.task_done()
 
             except Exception as e:
-                if self.verbose:
-                    print(f"[{self.gpu}] Error: {e}", file=sys.stderr)
-            finally:
-                self.job_queue.task_done()
+                # Ignore timeout exceptions when queue is empty
+                from queue import Empty
+                if not isinstance(e, Empty):
+                    if self.verbose:
+                        print(f"[{self.gpu}] Error: {e}", file=sys.stderr)
+                if job is not None:
+                    self.job_queue.task_done()
 
     def execute_job(self, job_id: int, job_config: dict):
         """Execute a single training job on this GPU."""
@@ -87,13 +94,18 @@ class GPUWorker(threading.Thread):
             print(f"\n[{self.gpu}] Job {job_id} starting at {start_time.strftime('%H:%M:%S')}")
             print(f"[{self.gpu}] Config: {job_config}")
 
+        # Copy base model to remote if needed
+        base_model_hash = job_config.get('_base_model_hash')
+        if base_model_hash:
+            self.copy_base_model_to_remote(base_model_hash)
+
         # Build the training command with this GPU's device ID
         job_config = copy.deepcopy(job_config)
         job_config['device'] = self.gpu.device_id
         cmd = self.build_training_command(self.script_path, **job_config)
 
-        # Prepend cd command so it runs in the tmux pane
-        full_cmd = f"cd ~/ml-customization && {cmd}"
+        # Prepend cd and source venv so it runs in the tmux pane
+        full_cmd = f"cd ~/ml-customization && source env/bin/activate && {cmd}"
 
         # Execute via SSH
         returncode, stdout, stderr = self.run_ssh_command(full_cmd)
@@ -104,7 +116,11 @@ class GPUWorker(threading.Thread):
         # Copy results back to host if job succeeded
         experiment_path = None
         if returncode == 0:
-            experiment_path = self.copy_results_to_host(job_config)
+            # For base_only jobs, copy base model instead of experiment results
+            if job_config.get('mode') == 'base_only':
+                experiment_path = self.copy_base_model_from_remote(job_config)
+            else:
+                experiment_path = self.copy_results_to_host(job_config)
 
         # Store result
         result = JobResult(
@@ -125,10 +141,143 @@ class GPUWorker(threading.Thread):
         status = "✓" if returncode == 0 else "✗"
         if self.verbose:
             print(f"[{self.gpu}] {status} Job {job_id} finished ({duration:.1f}s)")
-            if returncode != 0 and stderr:
+            if returncode != 0 and stderr and stderr.strip():
                 print(f"[{self.gpu}] Error: {stderr[:200]}")
             elif experiment_path:
                 print(f"[{self.gpu}] Results copied to: {experiment_path}")
+
+    def copy_base_model_to_remote(self, base_model_hash: str) -> bool:
+        """
+        Copy base model from local experiments/base_models/ to remote machine.
+
+        Args:
+            base_model_hash: Hash identifying the base model
+
+        Returns:
+            True if successful, False otherwise
+        """
+        local_base_dir = f"experiments/base_models/{base_model_hash}"
+        remote_base_dir = f"~/ml-customization/experiments/base_models/{base_model_hash}"
+
+        # Check if local base model exists
+        if not os.path.exists(local_base_dir):
+            if self.verbose:
+                print(f"[{self.gpu}] Warning: Local base model not found: {local_base_dir}")
+            return False
+
+        # Check if remote already has this base model
+        check_cmd = ["ssh", "-o", "StrictHostKeyChecking=no"]
+        if self.gpu.port != 22:
+            check_cmd.extend(["-p", str(self.gpu.port)])
+        if self.gpu.ssh_key:
+            check_cmd.extend(["-i", self.gpu.ssh_key])
+
+        host_string = f"{self.gpu.user}@{self.gpu.server}" if self.gpu.user else self.gpu.server
+        check_cmd.append(host_string)
+        check_cmd.append(f"test -d {remote_base_dir}/best_base_model.pt")
+
+        try:
+            result = subprocess.run(check_cmd, capture_output=True, timeout=10)
+            if result.returncode == 0:
+                if self.verbose:
+                    print(f"[{self.gpu}] Base model {base_model_hash} already cached on remote")
+                return True
+        except:
+            pass
+
+        # Copy base model to remote
+        if self.verbose:
+            print(f"[{self.gpu}] Copying base model {base_model_hash} to remote...")
+
+        scp_cmd = ["scp", "-r", "-o", "StrictHostKeyChecking=no"]
+        if self.gpu.port != 22:
+            scp_cmd.extend(["-P", str(self.gpu.port)])
+        if self.gpu.ssh_key:
+            scp_cmd.extend(["-i", self.gpu.ssh_key])
+
+        scp_cmd.append(local_base_dir)
+        scp_cmd.append(f"{host_string}:~/ml-customization/experiments/base_models/")
+
+        try:
+            result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=300)
+            if result.returncode == 0:
+                if self.verbose:
+                    print(f"[{self.gpu}] Successfully copied base model {base_model_hash}")
+                return True
+            else:
+                if self.verbose:
+                    print(f"[{self.gpu}] Failed to copy base model: {result.stderr}")
+                return False
+        except Exception as e:
+            if self.verbose:
+                print(f"[{self.gpu}] Error copying base model: {e}")
+            return False
+
+    def copy_base_model_from_remote(self, job_config: dict) -> Optional[str]:
+        """
+        Copy base model from remote machine to host after training.
+
+        Args:
+            job_config: Job configuration (must have '_base_model_hash')
+
+        Returns:
+            Local path where base model was copied, or None if failed
+        """
+        base_model_hash = job_config.get('_base_model_hash')
+        if not base_model_hash:
+            if self.verbose:
+                print(f"[{self.gpu}] Warning: No base model hash in job config")
+            return None
+
+        remote_base_dir = f"~/ml-customization/experiments/base_models/{base_model_hash}"
+        local_base_dir = f"experiments/base_models/{base_model_hash}"
+
+        # Build scp command
+        scp_cmd = ["scp", "-r", "-o", "StrictHostKeyChecking=no"]
+
+        if self.gpu.port != 22:
+            scp_cmd.extend(["-P", str(self.gpu.port)])
+
+        if self.gpu.ssh_key:
+            scp_cmd.extend(["-i", self.gpu.ssh_key])
+
+        host_string = f"{self.gpu.user}@{self.gpu.server}" if self.gpu.user else self.gpu.server
+        scp_cmd.append(f"{host_string}:{remote_base_dir}")
+        scp_cmd.append(local_base_dir)
+
+        try:
+            # Create local base models directory if needed
+            import os
+            os.makedirs("experiments/base_models", exist_ok=True)
+
+            # Copy files
+            result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=300)
+
+            if result.returncode == 0:
+                if self.verbose:
+                    print(f"[{self.gpu}] Base model copied to: {local_base_dir}")
+
+                # Delete from remote machine to save space
+                ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no"]
+                if self.gpu.port != 22:
+                    ssh_cmd.extend(["-p", str(self.gpu.port)])
+                if self.gpu.ssh_key:
+                    ssh_cmd.extend(["-i", self.gpu.ssh_key])
+                ssh_cmd.append(host_string)
+                ssh_cmd.append(f"rm -rf {remote_base_dir}")
+
+                subprocess.run(ssh_cmd, capture_output=True, timeout=30)
+
+                return local_base_dir
+            else:
+                if self.verbose:
+                    print(f"[{self.gpu}] Warning: Failed to copy base model: {result.stderr}")
+                return None
+
+        except Exception as e:
+            if self.verbose:
+                print(f"[{self.gpu}] Warning: Error copying base model: {e}")
+            return None
 
     def copy_results_to_host(self, job_config: dict) -> Optional[str]:
         """
@@ -257,12 +406,17 @@ class GPUWorker(threading.Thread):
         host_string = f"{self.gpu.user}@{self.gpu.server}" if self.gpu.user else self.gpu.server
         ssh_cmd.append(host_string)
 
-        # Wrap command to run in tmux pane
-        # Send keys to the specific pane and wait for completion
+        # Create a unique marker file to detect completion
+        import uuid
+        marker_file = f"/tmp/job_complete_{uuid.uuid4().hex}.marker"
+
+        # Wrap command to run in tmux pane and capture exit status
+        # Write exit code to marker file when done
+        escaped_cmd = command.replace("'", "'\\''")  # Escape single quotes
         tmux_cmd = (
-            f"tmux send-keys -t {self.tmux_session}.{self.tmux_pane} '{command}' C-m && "
-            f"while tmux list-panes -t {self.tmux_session} -F '#{{pane_index}} #{{pane_current_command}}' | "
-            f"grep '^{self.tmux_pane} ' | grep -q python; do sleep 2; done"
+            f"tmux send-keys -t {self.tmux_session}.{self.tmux_pane} "
+            f"'{escaped_cmd}; echo $? > {marker_file}' C-m && "
+            f"while [ ! -f {marker_file} ]; do sleep 2; done"
         )
 
         ssh_cmd.append(tmux_cmd)
@@ -277,7 +431,29 @@ class GPUWorker(threading.Thread):
                 timeout=7200  # 2 hour timeout per job
             )
 
-            # After job completes, capture the output from tmux pane buffer
+            # Read exit code from marker file
+            read_exit_cmd = ["ssh", "-o", "StrictHostKeyChecking=no"]
+            if self.gpu.port != 22:
+                read_exit_cmd.extend(["-p", str(self.gpu.port)])
+            if self.gpu.ssh_key:
+                read_exit_cmd.extend(["-i", self.gpu.ssh_key])
+            read_exit_cmd.append(host_string)
+            read_exit_cmd.append(f"cat {marker_file} && rm -f {marker_file}")
+
+            exit_result = subprocess.run(
+                read_exit_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=30
+            )
+
+            # Parse exit code
+            exit_code = 0
+            if exit_result.returncode == 0 and exit_result.stdout.strip().isdigit():
+                exit_code = int(exit_result.stdout.strip())
+
+            # Capture the output from tmux pane buffer
             capture_cmd = ["ssh", "-o", "StrictHostKeyChecking=no"]
             if self.gpu.port != 22:
                 capture_cmd.extend(["-p", str(self.gpu.port)])
@@ -296,9 +472,7 @@ class GPUWorker(threading.Thread):
 
             stdout = capture_result.stdout if capture_result.returncode == 0 else result.stdout
 
-            # Check exit status from tmux pane
-            # For now, assume success if no errors in waiting
-            return 0 if result.returncode == 0 else result.returncode, stdout, result.stderr
+            return exit_code, stdout, result.stderr
         except subprocess.TimeoutExpired:
             return -1, "", "Job timeout (2 hours exceeded)"
         except Exception as e:

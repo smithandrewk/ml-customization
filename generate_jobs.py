@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""
+Generate job configurations for distributed training.
+Similar to run.py but outputs jobs.json instead of running directly.
+"""
+
+import json
+from itertools import product
+
+# Grid search parameters
+GRID_PARAMS = {
+    'batch_size': [32, 64, 128, 256, 512],
+    'lr': [3e-4],
+    'early_stopping_patience': [40],
+    'mode': ['target_only'],  # 'full_fine_tuning', 'target_only', 'target_only_fine_tuning'
+    'target_data_pct': [1.0],  # 0.05, 0.1, 0.25, 0.5, 1.0
+    'n_base_participants': ['all'],  # 1, 2, 'all'
+}
+
+# Fixed parameters
+FIXED_PARAMS = {
+    'model': 'test',
+    'data_path': 'data/001_test',
+    'participants': ['tonmoy', 'asfik', 'ejaz'],
+    'window_size': 3000,
+    'use_augmentation': False,
+    'early_stopping_patience_target': 40,
+}
+
+# Prefix for experiment directories
+from datetime import datetime
+
+def generate_jobs():
+    """Generate all job combinations."""
+    jobs = []
+
+    # Get all combinations of grid parameters
+    param_names = list(GRID_PARAMS.keys())
+    param_values = list(GRID_PARAMS.values())
+
+    for param_combo in product(*param_values):
+        params = dict(zip(param_names, param_combo))
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        prefix = f"b{params['batch_size']}_{timestamp}"
+
+        # Run all folds
+        for fold in range(len(FIXED_PARAMS['participants'])):
+            job = {
+                'fold': fold,
+                'prefix': prefix,
+                **params,
+                **FIXED_PARAMS
+            }
+            jobs.append(job)
+
+    return jobs
+
+if __name__ == '__main__':
+    jobs = generate_jobs()
+
+    # Save to jobs_config.json
+    with open('jobs_config.json', 'w') as f:
+        json.dump(jobs, f, indent=2)
+
+    print(f"Generated {len(jobs)} jobs")
+    print(f"Saved to: jobs_config.json")
+    print(f"\nRun with:")
+    print(f"  python run_distributed_training.py --cluster-config cluster_config.json --jobs-config jobs_config.json")
