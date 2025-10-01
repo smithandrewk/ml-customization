@@ -65,19 +65,22 @@ class GPUWorker(threading.Thread):
     def run(self):
         """Process jobs from the queue."""
         while True:
+            job = None
             try:
                 job = self.job_queue.get(timeout=1)
                 if job is None:  # Poison pill to stop thread
+                    self.job_queue.task_done()
                     break
 
                 job_id, job_config = job
                 self.execute_job(job_id, job_config)
+                self.job_queue.task_done()
 
             except Exception as e:
-                if self.verbose:
+                if job is not None:
+                    self.job_queue.task_done()
+                if self.verbose and str(e) != "":
                     print(f"[{self.gpu}] Error: {e}", file=sys.stderr)
-            finally:
-                self.job_queue.task_done()
 
     def execute_job(self, job_id: int, job_config: dict):
         """Execute a single training job on this GPU."""
@@ -92,11 +95,12 @@ class GPUWorker(threading.Thread):
         job_config['device'] = self.gpu.device_id
         cmd = self.build_training_command(self.script_path, **job_config)
 
-        # Prepend cd command so it runs in the tmux pane
-        full_cmd = f"cd ~/ml-customization && {cmd}"
+        # Create a marker file when job completes
+        marker_file = f"/tmp/job_{job_id}_gpu{self.gpu.device_id}.done"
+        full_cmd = f"cd ~/ml-customization && source env/bin/activate && {cmd}; echo $? > {marker_file}"
 
         # Execute via SSH
-        returncode, stdout, stderr = self.run_ssh_command(full_cmd)
+        returncode, stdout, stderr = self.run_ssh_command(full_cmd, marker_file)
 
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
@@ -145,6 +149,28 @@ class GPUWorker(threading.Thread):
 
         remote_exp_dir = f"~/ml-customization/experiments/{prefix}/fold{fold}_{target_participant}"
         local_exp_dir = f"experiments/{prefix}/fold{fold}_{target_participant}"
+
+        # First, verify the directory exists on remote
+        ssh_check_cmd = ["ssh", "-o", "StrictHostKeyChecking=no"]
+        if self.gpu.port != 22:
+            ssh_check_cmd.extend(["-p", str(self.gpu.port)])
+        if self.gpu.ssh_key:
+            ssh_check_cmd.extend(["-i", self.gpu.ssh_key])
+
+        host_string = f"{self.gpu.user}@{self.gpu.server}" if self.gpu.user else self.gpu.server
+        ssh_check_cmd.append(host_string)
+        ssh_check_cmd.append(f"test -d {remote_exp_dir} && echo exists || echo missing")
+
+        try:
+            check_result = subprocess.run(ssh_check_cmd, capture_output=True, text=True, timeout=10)
+            if "missing" in check_result.stdout or check_result.returncode != 0:
+                if self.verbose:
+                    print(f"[{self.gpu}] Warning: Remote directory does not exist: {remote_exp_dir}")
+                return None
+        except Exception as e:
+            if self.verbose:
+                print(f"[{self.gpu}] Warning: Could not verify remote directory: {e}")
+            return None
 
         # Build scp command
         scp_cmd = ["scp", "-r", "-o", "StrictHostKeyChecking=no"]
@@ -244,7 +270,7 @@ class GPUWorker(threading.Thread):
 
         return cmd
 
-    def run_ssh_command(self, command: str) -> tuple:
+    def run_ssh_command(self, command: str, marker_file: str) -> tuple:
         """Execute command in tmux pane on remote host via SSH."""
         ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no"]
 
@@ -258,11 +284,11 @@ class GPUWorker(threading.Thread):
         ssh_cmd.append(host_string)
 
         # Wrap command to run in tmux pane
-        # Send keys to the specific pane and wait for completion
+        # Send keys to the specific pane and wait for marker file
         tmux_cmd = (
+            f"rm -f {marker_file} && "
             f"tmux send-keys -t {self.tmux_session}.{self.tmux_pane} '{command}' C-m && "
-            f"while tmux list-panes -t {self.tmux_session} -F '#{{pane_index}} #{{pane_current_command}}' | "
-            f"grep '^{self.tmux_pane} ' | grep -q python; do sleep 2; done"
+            f"while [ ! -f {marker_file} ]; do sleep 2; done"
         )
 
         ssh_cmd.append(tmux_cmd)
@@ -296,9 +322,29 @@ class GPUWorker(threading.Thread):
 
             stdout = capture_result.stdout if capture_result.returncode == 0 else result.stdout
 
-            # Check exit status from tmux pane
-            # For now, assume success if no errors in waiting
-            return 0 if result.returncode == 0 else result.returncode, stdout, result.stderr
+            # Read the exit code from marker file
+            exit_code_cmd = ["ssh", "-o", "StrictHostKeyChecking=no"]
+            if self.gpu.port != 22:
+                exit_code_cmd.extend(["-p", str(self.gpu.port)])
+            if self.gpu.ssh_key:
+                exit_code_cmd.extend(["-i", self.gpu.ssh_key])
+            exit_code_cmd.append(host_string)
+            exit_code_cmd.append(f"cat {marker_file} 2>/dev/null || echo 1")
+
+            exit_code_result = subprocess.run(
+                exit_code_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=10
+            )
+
+            try:
+                job_exit_code = int(exit_code_result.stdout.strip())
+            except (ValueError, AttributeError):
+                job_exit_code = 1
+
+            return job_exit_code, stdout, result.stderr
         except subprocess.TimeoutExpired:
             return -1, "", "Job timeout (2 hours exceeded)"
         except Exception as e:
@@ -556,9 +602,9 @@ Example usage:
         """
     )
 
-    parser.add_argument('--cluster-config', required=True,
+    parser.add_argument('--cluster-config', required=False, default='cluster_config.json',
                        help='Path to JSON file with cluster configuration')
-    parser.add_argument('--jobs-config', required=True,
+    parser.add_argument('--jobs-config', required=False, default='jobs_config.json',
                        help='Path to JSON file with job configurations')
     parser.add_argument('--script-path', default='train.py',
                        help='Path to train.py relative to ~/ml-customization (can be overridden in cluster config)')
