@@ -34,16 +34,16 @@ class TestModel(nn.Module):
     def __init__(self):
         super(TestModel, self).__init__()
         self.blocks = []
-        self.blocks.append(Block(6,64))
+        self.blocks.append(Block(6,8))
         for _ in range(1):
-            self.blocks.append(Block(64,64))
-            self.blocks.append(Block(64,64,pool=False))
+            self.blocks.append(Block(8,8))
+            self.blocks.append(Block(8,8,pool=False))
 
-        self.blocks.append(Block(64,128,pool=False))
+        self.blocks.append(Block(8,16,pool=False))
             
         self.blocks = nn.ModuleList(self.blocks)
         self.gap = nn.AdaptiveAvgPool1d(1)
-        self.fc = nn.Linear(128, 1)
+        self.fc = nn.Linear(16, 1)
     
     def forward(self, x):
         for block in self.blocks:

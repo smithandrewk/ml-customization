@@ -168,7 +168,7 @@ def compute_loss_and_f1(model, dataloader, criterion, device):
     f1 = f1_score(y_true, y_pred, average='macro')
     return total_loss / count, float(f1)
 
-def optimize_model_and_compute_loss(model, dataloader, optimizer, criterion, device, log=False):
+def optimize_model_and_compute_loss(model, dataloader, optimizer, criterion, device):
     model.train()
     total_loss = 0.0
     count = 0
@@ -182,8 +182,6 @@ def optimize_model_and_compute_loss(model, dataloader, optimizer, criterion, dev
         optimizer.step()
         total_loss += loss.item() * Xi.size(0)
         count += Xi.size(0)
-    if log:
-        return math.log(total_loss / count)
     return total_loss / count
 
 def optimize_model_compute_loss_and_f1(model, dataloader, optimizer, criterion, device, augmenter=None):

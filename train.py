@@ -24,7 +24,7 @@ argparser.add_argument('--aug_prob', type=float, default=0.3, help='Probability 
 argparser.add_argument('--prefix', type=str, default='alpha', help='Experiment prefix/directory name')
 argparser.add_argument('--early_stopping_patience', type=int, default=40, help='Early stopping patience for base phase')
 argparser.add_argument('--early_stopping_patience_target', type=int, default=40, help='Early stopping patience for target phase')
-argparser.add_argument('--mode', type=str, default='full_fine_tuning', choices=['full_fine_tuning', 'target_only'], help='Mode')
+argparser.add_argument('--mode', type=str, default='full_fine_tuning', choices=['full_fine_tuning', 'target_only', 'target_only_fine_tuning'], help='Mode')
 argparser.add_argument('--lr', type=float, default=3e-4, help='Learning rate')
 argparser.add_argument('--target_data_pct', type=float, default=1.0, help='Percentage of target training data to use (0.0-1.0)')
 argparser.add_argument('--participants', type=str, nargs='+', default=['tonmoy','asfik','ejaz'], help='List of participant names for cross-validation')
@@ -90,41 +90,9 @@ if participants:
 target_train_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_train.pt'))
 target_val_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_val.pt'))
 
-# Subsample target training data if specified
-target_data_pct = hyperparameters['target_data_pct']
-if target_data_pct < 1.0:
-    original_size = len(target_train_dataset)
-    subset_size = int(original_size * target_data_pct)
-
-    # Create random indices for subsampling
-    import random
-    random.seed(42)  # For reproducibility
-    indices = random.sample(range(original_size), subset_size)
-
-    # Create subset dataset
-    from torch.utils.data import Subset
-    target_train_dataset = Subset(target_train_dataset, indices)
-
-    # In target_only mode, also subsample base_train_dataset (which is the same data)
-    if hyperparameters['mode'] == 'target_only':
-        base_train_dataset = Subset(base_train_dataset, indices)
-
-    print(f'Subsampled target training data: {original_size} -> {subset_size} samples ({target_data_pct*100:.1f}%)')
-
-from lib.utils import SimpleSmokingCNN, MediumSmokingCNN, SmokingCNN
-
 model_type = hyperparameters['model_type']
-if model_type == 'simple':
-    model = SimpleSmokingCNN(window_size=window_size, num_features=6)
-elif model_type == 'medium':
-    model = MediumSmokingCNN(window_size=window_size, num_features=6)
-elif model_type == 'full':
-    model = SmokingCNN(window_size=window_size, num_features=6)
-elif model_type == 'test':
-    from lib.models import TestModel
-    model = TestModel()
-else:
-    raise ValueError(f"Invalid model type: {model_type}. Choose from 'simple', 'medium', 'full'")
+from lib.models import TestModel
+model = TestModel()
 criterion = nn.BCEWithLogitsLoss()
 optimizer = torch.optim.AdamW(model.parameters(), lr=hyperparameters['lr'])
 print(f'Using {model_type} model: {model.__class__.__name__}')
@@ -137,7 +105,6 @@ if hyperparameters['use_augmentation']:
         'magnitude_scale_range': hyperparameters['magnitude_range'],
         'augmentation_probability': hyperparameters['aug_prob']
     })
-    print(f'Data augmentation enabled: jitter_std={hyperparameters["jitter_std"]}, mag_range={hyperparameters["magnitude_range"]}, prob={hyperparameters["aug_prob"]}')
 
 print(f'Total model parameters: {sum(p.numel() for p in model.parameters())}')
 
@@ -174,13 +141,37 @@ if hyperparameters['mode'] == 'target_only':
 else:
     phase = 'base'
 
-base_trainloader = DataLoader(base_train_dataset, batch_size=batch_size, shuffle=True)
-base_valloader = DataLoader(base_val_dataset, batch_size=batch_size, shuffle=False)
+
+from lib.train_utils import random_subsample
+from lib.train_utils import append_losses_and_f1
+
+if participants:
+    print(f'Base train dataset size: {len(base_train_dataset)}')
+    base_train_dataset = random_subsample(base_train_dataset, 1)
+    print(f'Base train dataset size: {len(base_train_dataset)}')
+
+    print(f'Base val dataset size: {len(base_val_dataset)}')
+    base_val_dataset = random_subsample(base_val_dataset, .5)
+    print(f'Base val dataset size: {len(base_val_dataset)}')
+
+    base_trainloader = DataLoader(base_train_dataset, batch_size=batch_size, shuffle=True)
+    base_valloader = DataLoader(base_val_dataset, batch_size=batch_size, shuffle=False)
+
+# Subsample target training data if specified
+target_data_pct = hyperparameters['target_data_pct']
+if target_data_pct < 1.0:
+    print(f'Target train dataset size: {len(target_train_dataset)}')
+    target_train_dataset = random_subsample(target_train_dataset, target_data_pct)
+    print(f'Target train dataset size: {len(target_train_dataset)}')
+
+print(f'Target val dataset size: {len(target_val_dataset)}')
+target_val_dataset = random_subsample(target_val_dataset, .1)
+print(f'Target val dataset size: {len(target_val_dataset)}')
+
+
 target_trainloader = DataLoader(target_train_dataset, batch_size=batch_size, shuffle=True)
 target_valloader = DataLoader(target_val_dataset, batch_size=batch_size, shuffle=False)
 
-print(f'Base train dataset size: {len(base_train_dataset)}')
-print(f'Base val dataset size: {len(base_val_dataset)}')
 print(f'Target train dataset size: {len(target_train_dataset)}')
 print(f'Target val dataset size: {len(target_val_dataset)}')
 
@@ -192,22 +183,19 @@ else:
     valloader = base_valloader
 
 while True:
+    if epoch >= 500:
+        print("Maximum epochs reached.")
+        torch.save(model.state_dict(), f'{new_exp_dir}/last_{phase}_model.pt')
+        break
+
     start_time = time()
     model.train()
     train_loss, train_f1 = optimize_model_compute_loss_and_f1(model, trainloader, optimizer, criterion, device=device, augmenter=augmenter)
+    lossi = append_losses_and_f1(phase, train_loss, train_f1, lossi, hyperparameters)
 
-    # In target_only mode, trainloader contains target data, so log to target train loss
-    if hyperparameters['mode'] == 'target_only':
-        lossi['target train loss'].append(train_loss)
-        lossi['target train f1'].append(train_f1)
-    else:
-        lossi['base train loss'].append(train_loss)
-        lossi['base train f1'].append(train_f1)
-
-        # Only compute target train loss separately when not in target_only mode
-        loss,f1 = compute_loss_and_f1(model, target_trainloader, criterion, device=device)
-        lossi['target train loss'].append(loss)
-        lossi['target train f1'].append(f1)
+    # loss,f1 = compute_loss_and_f1(model, target_trainloader, criterion, device=device)
+    # lossi['target train loss'].append(loss)
+    # lossi['target train f1'].append(f1)
 
     loss,f1 = compute_loss_and_f1(model, valloader, criterion, device=device)
 
@@ -250,44 +238,52 @@ while True:
         if phase == 'base' and hyperparameters['mode'] not in ['generic', 'target_only']:
             torch.save(model.state_dict(), f'{new_exp_dir}/last_{phase}_model.pt')
             phase = 'target'
-            trainloader = DataLoader(ConcatDataset([base_train_dataset, target_train_dataset]), batch_size=batch_size, shuffle=True)
+            if hyperparameters['mode'] == 'target_only_fine_tuning':
+                trainloader = DataLoader(target_train_dataset, batch_size=batch_size, shuffle=True)
+            else:
+                trainloader = DataLoader(ConcatDataset([base_train_dataset, target_train_dataset]), batch_size=batch_size, shuffle=True)
             best_val_loss = float('inf')
             patience_counter = 0
-            
+
             metrics['transition_epoch'] = epoch
         else:
             print("Early stopping triggered.")
             torch.save(model.state_dict(), f'{new_exp_dir}/last_{phase}_model.pt')
             break
 
-    plot_loss_and_f1(lossi, new_exp_dir, metrics, patience_counter)
+    if epoch % 10 == 0:
+        plot_loss_and_f1(lossi, new_exp_dir, metrics, patience_counter)
+
     epoch += 1
-    print(f'Epoch {epoch}, Phase: {phase}, Time Elapsed: {time() - start_time:.2f}s, Patience Counter: {patience_counter}, Train Loss: {train_loss:.4f}, Train F1: {train_f1:.4f}, Val Loss: {lossi[val_loss_key][-1]:.4f}, Val F1: {lossi[val_f1_key][-1]:.4f}')
+    # print(f'Epoch {epoch}, Phase: {phase}, Time Elapsed: {time() - start_time:.2f}s, Patience Counter: {patience_counter}, Train F1: {train_f1:.4f}, Val Loss: {lossi[val_loss_key][-1]:.4f}, Val F1: {lossi[val_f1_key][-1]:.4f}')
+    print(f'Epoch {epoch}, Phase: {phase}, Time Elapsed: {time() - start_time:.2f}s, Train Loss: {train_loss:.4f}, Train F1: {train_f1:.4f}')
 
-# Evaluate best models on target test set
-target_testloader = DataLoader(TensorDataset(*torch.load(f'{data_path}/{target_participant}_test.pt')), batch_size=batch_size)
-# Evaluate best base model on target test set
-if hyperparameters['mode'] == 'full_fine_tuning':
-    model.load_state_dict(torch.load(f'{new_exp_dir}/best_base_model.pt'))
-    model.to(device)
-    test_loss, test_f1 = compute_loss_and_f1(model, target_testloader, criterion, device=device)
-    metrics['best_base_model_target_test_loss'] = test_loss
-    metrics['best_base_model_target_test_f1'] = test_f1
 
-# Evaluate best target model on target test set
-model.load_state_dict(torch.load(f'{new_exp_dir}/best_target_model.pt'))
-model.to(device)
-test_loss, test_f1 = compute_loss_and_f1(model, target_testloader, criterion, device=device)
-metrics['best_target_model_target_test_loss'] = test_loss
-metrics['best_target_model_target_test_f1'] = test_f1
+# # Evaluate best models on target test set
+# target_testloader = DataLoader(TensorDataset(*torch.load(f'{data_path}/{target_participant}_test.pt')), batch_size=batch_size)
+# # Evaluate best base model on target test set
+# if hyperparameters['mode'] == 'full_fine_tuning':
+#     model.load_state_dict(torch.load(f'{new_exp_dir}/best_base_model.pt'))
+#     model.to(device)
+#     test_loss, test_f1 = compute_loss_and_f1(model, target_testloader, criterion, device=device)
+#     metrics['best_base_model_target_test_loss'] = test_loss
+#     metrics['best_base_model_target_test_f1'] = test_f1
 
-# Also evaluate best base model (from base phase) on target val set
-if hyperparameters['mode'] == 'full_fine_tuning':
-    metrics['best_base_model_target_val_loss'] = lossi['target val loss'][metrics['best_base_val_loss_epoch']]
-    metrics['best_base_model_target_val_f1'] = lossi['target val f1'][metrics['best_base_val_loss_epoch']]
+# # Evaluate best target model on target test set
+# model.load_state_dict(torch.load(f'{new_exp_dir}/best_target_model.pt'))
+# model.to(device)
+# test_loss, test_f1 = compute_loss_and_f1(model, target_testloader, criterion, device=device)
+# metrics['best_target_model_target_test_loss'] = test_loss
+# metrics['best_target_model_target_test_f1'] = test_f1
 
-metrics['best_target_model_target_val_loss'] = lossi['target val loss'][metrics['best_target_val_loss_epoch']]
-metrics['best_target_model_target_val_f1'] = lossi['target val f1'][metrics['best_target_val_loss_epoch']]
+# # Also evaluate best base model (from base phase) on target val set
+# if hyperparameters['mode'] == 'full_fine_tuning':
+#     metrics['best_base_model_target_val_loss'] = lossi['target val loss'][metrics['best_base_val_loss_epoch']]
+#     metrics['best_base_model_target_val_f1'] = lossi['target val f1'][metrics['best_base_val_loss_epoch']]
+
+# metrics['best_target_model_target_val_loss'] = lossi['target val loss'][metrics['best_target_val_loss_epoch']]
+# metrics['best_target_model_target_val_f1'] = lossi['target val f1'][metrics['best_target_val_loss_epoch']]
 
 from lib.train_utils import save_metrics_and_losses
+plot_loss_and_f1(lossi, new_exp_dir, metrics, patience_counter)
 save_metrics_and_losses(metrics, lossi, hyperparameters, new_exp_dir)

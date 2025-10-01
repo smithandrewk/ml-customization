@@ -1,4 +1,7 @@
-# TODO: remove support for training modes other than full_fine_tuning and target_only
+"""
+TODO: combine f1 and loss plots
+"""
+
 # TODO: add test set evaluation after training completes
 # TODO: if target only, store metrics to target not base
 """
@@ -27,9 +30,9 @@ GRID_PARAMS = {
     'batch_size': [32],
     'lr': [3e-4],
     'patience': [40],
-    'mode': ['full_fine_tuning', 'target_only'],  # 'full_fine_tuning', 'target_only'
-    'target_data_pct': [0.05, 0.1, 0.25, 0.5, 1.0],  # 0.05, 0.1, 0.25, 0.5, 1.0,
-    'n_base_participants': [1,2,3,4,5,6],  # 1, 2, all, must be <= number of participants - 1
+    'mode': ['target_only'],  # 'full_fine_tuning', 'target_only', 'target_only_fine_tuning'
+    'target_data_pct': [1.0],  # 0.05, 0.1, 0.25, 0.5, 1.0,
+    'n_base_participants': [1],  # 1, 2, all, must be <= number of participants - 1
 }
 
 FIXED_PARAMS = {
@@ -37,7 +40,7 @@ FIXED_PARAMS = {
     'model': 'test',
     'use_augmentation': True,
     'data_path': 'data/001_60s_window',
-    'participants': ['tonmoy','asfik','ejaz','alsaad','unk1','anam','iftakhar'],
+    'participants': ['tonmoy','asfik'],
     'window_size': 3000,
 }
 
@@ -74,7 +77,7 @@ def run_experiments():
             
         n_base_participants = params['n_base_participants']
 
-        for fold,participant in enumerate(FIXED_PARAMS['participants']):
+        for fold,participant in enumerate(FIXED_PARAMS['participants'][:1]):
             cmd = [
                 'python3', 'train.py',
                 '--fold', str(fold),
