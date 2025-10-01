@@ -1,10 +1,90 @@
 import yaml
+import matplotlib.pyplot as plt
+from torch.utils.data import DataLoader, TensorDataset, ConcatDataset
+import torch
+from datetime import datetime
+def add_arguments(argparser):
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    argparser.add_argument('--fold', type=int, required=False, default=0, help='Fold index for leave-one-participant-out cross-validation')
+    argparser.add_argument('--device', type=int, required=False, default=0, help='GPU device index')
+    argparser.add_argument('--batch_size', type=int, required=False, default=64, help='batch size')
+    argparser.add_argument('--model', type=str, default='test', choices=['test'],help='Model architecture')
+    argparser.add_argument('--use_augmentation', action='store_true', help='Enable data augmentation')
+    argparser.add_argument('--jitter_std', type=float, default=0.005, help='Standard deviation for jitter noise')
+    argparser.add_argument('--magnitude_range', type=float, nargs=2, default=[0.98, 1.02], help='Range for magnitude scaling')
+    argparser.add_argument('--aug_prob', type=float, default=0.3, help='Probability of applying augmentation')
+    argparser.add_argument('--prefix', type=str, default=timestamp, help='Experiment prefix/directory name')
+    argparser.add_argument('--early_stopping_patience', type=int, default=40, help='Early stopping patience for base phase')
+    argparser.add_argument('--early_stopping_patience_target', type=int, default=40, help='Early stopping patience for target phase')
+    argparser.add_argument('--mode', type=str, default='full_fine_tuning', choices=['full_fine_tuning', 'target_only', 'target_only_fine_tuning'], help='Mode')
+    argparser.add_argument('--lr', type=float, default=3e-4, help='Learning rate')
+    argparser.add_argument('--target_data_pct', type=float, default=1.0, help='Percentage of target training data to use (0.0-1.0)')
+    argparser.add_argument('--participants', type=str, nargs='+', default=['tonmoy','asfik','ejaz'], help='List of participant names for cross-validation')
+    argparser.add_argument('--window_size', type=int, default=3000, help='Window size in samples (e.g., 3000 = 60s at 50Hz)')
+    argparser.add_argument('--data_path', type=str, default='data/001_60s_window', help='Path to dataset directory')
+    argparser.add_argument('--n_base_participants', type=str, default='all', help='Number of base participants to use (integer or "all")')
+    return argparser
+
 def load_config(config_path):
     with open(config_path, 'r') as file:
         return yaml.safe_load(file)
-    
-from torch.utils.data import DataLoader, TensorDataset, ConcatDataset
-import torch
+
+def plot_loss_and_f1(lossi, new_exp_dir, metrics, patience_counter):
+    plt.figure(figsize=(7.2,4.48),dpi=300)
+    plt.plot(lossi['base train loss'], label='Train Loss (base)', color='b')
+    plt.plot(lossi['base val loss'], label='Val Loss (base)', color='b', linestyle='--')
+    plt.plot(lossi['target train loss'], label='Train Loss (target)', color='g')
+    plt.plot(lossi['target val loss'], label='Val Loss (target)', color='g', linestyle='--')
+
+    if metrics['transition_epoch'] is not None:
+        plt.axvline(x=metrics['transition_epoch'], color='r', linestyle='--', label='Phase Transition')
+
+    if metrics['best_base_val_loss_epoch'] is not None and metrics['best_base_val_loss'] is not None:
+        plt.axhline(y=metrics['best_base_val_loss'], color='b', linestyle='--', label='Best Base Val Loss', alpha=0.5)
+        plt.axvline(x=metrics['best_base_val_loss_epoch'], color='b', linestyle='--', alpha=0.5)
+        if metrics['best_base_val_loss_epoch'] < len(lossi['target val loss']) and lossi['target val loss'][metrics['best_base_val_loss_epoch']] is not None:
+            plt.axhline(y=lossi['target val loss'][metrics['best_base_val_loss_epoch']], color='g', linestyle='--', label='Best Base Val Loss', alpha=0.5)
+
+    if metrics['best_target_val_loss_epoch'] is not None and metrics['best_target_val_loss'] is not None:
+        plt.axhline(y=metrics['best_target_val_loss'], color='g', linestyle='--', label='Best target Val Loss', alpha=0.8)
+        plt.axvline(x=metrics['best_target_val_loss_epoch'], color='g', linestyle='--', alpha=0.4)
+
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.yscale('log')
+    plt.title(f'Patience Counter: {patience_counter}')
+    plt.savefig(f'{new_exp_dir}/loss.jpg', bbox_inches='tight')
+    plt.savefig(f'loss.jpg', bbox_inches='tight')
+    plt.close()
+
+    plt.figure(figsize=(7.2,4.48),dpi=300)
+    plt.plot(lossi['base train f1'], label='Train f1 (base)', color='b')
+    plt.plot(lossi['base val f1'], label='Val f1 (base)', color='b', linestyle='--')
+    plt.plot(lossi['target train f1'], label='Train f1 (target)', color='g')
+    plt.plot(lossi['target val f1'], label='Val f1 (target)', color='g', linestyle='--')
+
+    if metrics['transition_epoch'] is not None:
+        plt.axvline(x=metrics['transition_epoch'], color='r', linestyle='--', label='Phase Transition')
+
+    if metrics['best_base_val_f1_epoch'] is not None and metrics['best_base_val_f1'] is not None:
+        plt.axhline(y=metrics['best_base_val_f1'], color='b', linestyle='--', label='Best Base f1 Loss', alpha=0.5)
+        plt.axvline(x=metrics['best_base_val_f1_epoch'], color='b', linestyle='--', alpha=0.5)
+        if metrics['best_base_val_f1_epoch'] < len(lossi['target val f1']) and lossi['target val f1'][metrics['best_base_val_f1_epoch']] is not None:
+            plt.axhline(y=lossi['target val f1'][metrics['best_base_val_f1_epoch']], color='g', linestyle='--', label='Best Base Val Loss', alpha=0.5)
+
+    if metrics['best_target_val_f1_epoch'] is not None and metrics['best_target_val_f1'] is not None:
+        plt.axhline(y=metrics['best_target_val_f1'], color='g', linestyle='--', label='Best target f1 Loss', alpha=0.8)
+        plt.axvline(x=metrics['best_target_val_f1_epoch'], color='g', linestyle='--', alpha=0.4)
+
+    plt.xlabel('Epoch')
+    plt.ylabel('F1')
+    plt.legend()
+    plt.title(f'Patience Counter: {patience_counter}')
+    plt.savefig(f'{new_exp_dir}/f1.jpg', bbox_inches='tight')
+    plt.savefig(f'f1.jpg', bbox_inches='tight')
+    plt.close()
 
 def load_data(config):
     dataset_name = config['dataset'].get('name', 'default_dataset')
@@ -40,7 +120,6 @@ def save_metrics_and_losses(metrics, lossi, config, new_exp_dir):
     with open(f'{new_exp_dir}/hyperparameters.json', 'w') as f:
         json.dump(config, f, indent=4)
 
-import matplotlib.pyplot as plt
 def plot_loss_and_f1_refactored(lossi, new_exp_dir):
     fig,ax = plt.subplots(nrows=2,ncols=1,figsize=(7.2,9),dpi=300)
     if len(lossi['base train loss']) > 0 and len(lossi['base val loss']) > 0:
@@ -108,3 +187,76 @@ def append_losses_and_f1(phase, train_loss, train_f1, lossi, hyperparameters):
         lossi['base train f1'].append(train_f1)
     
     return lossi
+
+
+from sklearn.metrics import f1_score
+
+def compute_loss_and_f1(model, dataloader, criterion, device):
+    model.eval()
+    total_loss = 0.0
+    count = 0
+    y_true = []
+    y_pred = []
+    with torch.no_grad():
+        for Xi, yi in dataloader:
+            Xi = Xi.to(device)
+            yi = yi.to(device).float()
+            logits = model(Xi).squeeze(-1)
+            loss = criterion(logits, yi)
+            total_loss += loss.item() * Xi.size(0)
+            count += Xi.size(0)
+            y_true.append(yi.cpu())
+            y_pred.append(logits.sigmoid().round().cpu())
+    y_true = torch.cat(y_true).cpu()
+    y_pred = torch.cat(y_pred).cpu()
+    f1 = f1_score(y_true, y_pred, average='macro')
+    return total_loss / count, float(f1)
+
+def optimize_model_compute_loss_and_f1(model, dataloader, optimizer, criterion, device, augmenter=None):
+    model.train()
+    total_loss = 0.0
+    count = 0
+    y_true = []
+    y_pred = []
+    for Xi, yi in dataloader:
+        Xi = Xi.to(device)
+        yi = yi.to(device).float().view(-1,1)
+
+        # Apply augmentation if provided
+        if augmenter is not None:
+            Xi, yi = augmenter.augment(Xi, yi)
+
+        optimizer.zero_grad()
+        logits = model(Xi)
+        loss = criterion(logits,yi)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item() * Xi.size(0)
+        count += Xi.size(0)
+        y_true.append(yi.cpu())
+        y_pred.append(logits.sigmoid().round().cpu())
+    y_true = torch.cat(y_true).cpu().detach()
+    y_pred = torch.cat(y_pred).cpu().detach()
+    f1 = f1_score(y_true, y_pred, average='macro')
+    # f1 = (2 * (y_true * y_pred).sum()) / ((y_true + y_pred).sum() + 1e-8)
+    return total_loss / count, float(f1)
+
+from sklearn.metrics import classification_report,ConfusionMatrixDisplay
+
+def evaluate(model, dataloader, device):
+    y_pred = []
+    y_true = []
+    model.eval()
+    model.to(device)
+    with torch.no_grad():
+        for Xi,yi in dataloader:
+            Xi = Xi.to(device)
+            y_true.append(yi)
+            y_pred.append(model(Xi).sigmoid().round().cpu().flatten())
+    y_true = torch.cat(y_true).cpu()
+    y_pred = torch.cat(y_pred).cpu()
+
+    print(classification_report(y_true, y_pred, target_names=['No Smoking', 'Smoking']))
+    ConfusionMatrixDisplay.from_predictions(y_true, y_pred,normalize='true')
+    ConfusionMatrixDisplay.from_predictions(y_true, y_pred,normalize='pred')
+    return y_true,y_pred

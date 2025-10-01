@@ -21,7 +21,6 @@ import subprocess
 from itertools import product
 
 parser = argparse.ArgumentParser(description='Create participant-specific smoking detection dataset')
-parser.add_argument('--config', type=str, default='configs/train_config.yaml', help='Path to config file')
 parser.add_argument('--dry-run', action='store_true', help='Print commands without running them')
 parser.add_argument('--device', type=int, default=0, help='GPU device index')
 args = parser.parse_args()
@@ -29,7 +28,7 @@ args = parser.parse_args()
 GRID_PARAMS = {
     'batch_size': [32],
     'lr': [3e-4],
-    'patience': [40],
+    'patience': [5],
     'mode': ['target_only'],  # 'full_fine_tuning', 'target_only', 'target_only_fine_tuning'
     'target_data_pct': [1.0],  # 0.05, 0.1, 0.25, 0.5, 1.0,
     'n_base_participants': [1],  # 1, 2, all, must be <= number of participants - 1
