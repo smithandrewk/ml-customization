@@ -29,7 +29,7 @@ args = parser.parse_args()
 GRID_PARAMS = {
     'batch_size': [32],
     'lr': [3e-4],
-    'patience': [40],
+    'patience': [5],
     'mode': ['target_only'],  # 'full_fine_tuning', 'target_only', 'target_only_fine_tuning'
     'target_data_pct': [1.0],  # 0.05, 0.1, 0.25, 0.5, 1.0,
     'n_base_participants': [1],  # 1, 2, all, must be <= number of participants - 1
