@@ -66,3 +66,45 @@ def plot_loss_and_f1_refactored(lossi, new_exp_dir):
     plt.savefig(f'{new_exp_dir}/loss_and_f1.jpg', bbox_inches='tight')
     plt.savefig(f'loss_and_f1.jpg', bbox_inches='tight')
     plt.close()
+    
+def random_subsample(dataset, pct):
+    print(f'Subsampling dataset to {pct*100}% of original size')
+    original_size = len(dataset)
+    subset_size = int(original_size * pct)
+
+    # Create random indices for subsampling
+    import random
+    random.seed(42)  # For reproducibility
+    indices = random.sample(range(original_size), subset_size)
+
+    # Create subset dataset
+    from torch.utils.data import Subset
+    return Subset(dataset, indices)
+
+def append_losses_and_f1(phase, train_loss, train_f1, lossi, hyperparameters):
+    if hyperparameters['mode'] == 'target_only':
+        lossi['target train loss'].append(train_loss)
+        lossi['target train f1'].append(train_f1)
+    elif hyperparameters['mode'] == 'target_only_fine_tuning' and phase == 'base':
+        lossi['target train loss'].append(None)
+        lossi['target train f1'].append(None)
+
+        lossi['base train loss'].append(train_loss)
+        lossi['base train f1'].append(train_f1)
+    elif hyperparameters['mode'] == 'target_only_fine_tuning' and phase == 'target':
+        lossi['target train loss'].append(train_loss)
+        lossi['target train f1'].append(train_f1)
+
+        lossi['base train loss'].append(None)
+        lossi['base train f1'].append(None)
+    elif hyperparameters['mode'] == 'full_fine_tuning' and phase == 'base':
+        lossi['base train loss'].append(train_loss)
+        lossi['base train f1'].append(train_f1)
+
+        lossi['target train loss'].append(None)
+        lossi['target train f1'].append(None)
+    elif hyperparameters['mode'] == 'full_fine_tuning' and phase == 'target':
+        lossi['base train loss'].append(train_loss)
+        lossi['base train f1'].append(train_f1)
+    
+    return lossi
