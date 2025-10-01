@@ -9,12 +9,33 @@ import subprocess
 import sys
 import json
 import time
+import hashlib
 from typing import List, Optional, Dict
 from datetime import datetime
 import threading
 from queue import Queue
 from dataclasses import dataclass, asdict
 import copy
+
+
+def hash_config(config: dict, exclude_keys: set = None) -> str:
+    """
+    Generate a short hash from job config to create unique experiment names.
+
+    Args:
+        config: Job configuration dictionary
+        exclude_keys: Keys to exclude from hash (e.g., 'fold', 'device', 'prefix')
+
+    Returns:
+        8-character hex hash
+    """
+    if exclude_keys is None:
+        exclude_keys = {'fold', 'device', 'prefix', 'participants'}
+
+    # Create a sorted, filtered dict for consistent hashing
+    filtered = {k: v for k, v in sorted(config.items()) if k not in exclude_keys}
+    config_str = json.dumps(filtered, sort_keys=True)
+    return hashlib.md5(config_str.encode()).hexdigest()[:8]
 
 
 @dataclass
@@ -93,6 +114,12 @@ class GPUWorker(threading.Thread):
         # Build the training command with this GPU's device ID
         job_config = copy.deepcopy(job_config)
         job_config['device'] = self.gpu.device_id
+
+        # Add config hash to prefix for unique experiment names
+        original_prefix = job_config.get('prefix', 'alpha')
+        config_hash = hash_config(job_config)
+        job_config['prefix'] = f"{original_prefix}_{config_hash}"
+
         cmd = self.build_training_command(self.script_path, **job_config)
 
         # Create a marker file when job completes
@@ -147,8 +174,12 @@ class GPUWorker(threading.Thread):
         participants = job_config.get('participants', ['tonmoy', 'asfik', 'ejaz'])
         target_participant = participants[fold]
 
-        remote_exp_dir = f"~/ml-customization/experiments/{prefix}/fold{fold}_{target_participant}"
-        local_exp_dir = f"experiments/{prefix}/fold{fold}_{target_participant}"
+        # Add config hash to make path unique
+        config_hash = hash_config(job_config)
+        exp_name = f"{prefix}_{config_hash}"
+
+        remote_exp_dir = f"~/ml-customization/experiments/{exp_name}/fold{fold}_{target_participant}"
+        local_exp_dir = f"experiments/{exp_name}/fold{fold}_{target_participant}"
 
         # First, verify the directory exists on remote
         ssh_check_cmd = ["ssh", "-o", "StrictHostKeyChecking=no"]
@@ -188,7 +219,7 @@ class GPUWorker(threading.Thread):
         try:
             # Create local experiments directory if needed
             import os
-            os.makedirs(f"experiments/{prefix}", exist_ok=True)
+            os.makedirs(f"experiments/{exp_name}", exist_ok=True)
 
             # Copy files
             result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=300)

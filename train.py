@@ -146,11 +146,6 @@ else:
     valloader = base_valloader
 
 while True:
-    if epoch >= 500:
-        print("Maximum epochs reached.")
-        torch.save(model.state_dict(), f'{new_exp_dir}/last_{phase}_model.pt')
-        break
-
     start_time = time()
     model.train()
     train_loss, train_f1 = optimize_model_compute_loss_and_f1(model, trainloader, optimizer, criterion, device=device, augmenter=augmenter)
