@@ -2,7 +2,29 @@ import yaml
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, TensorDataset, ConcatDataset
 import torch
+from datetime import datetime
+def add_arguments(argparser):
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
+    argparser.add_argument('--fold', type=int, required=False, default=0, help='Fold index for leave-one-participant-out cross-validation')
+    argparser.add_argument('--device', type=int, required=False, default=0, help='GPU device index')
+    argparser.add_argument('--batch_size', type=int, required=False, default=64, help='batch size')
+    argparser.add_argument('--model', type=str, default='test', choices=['test'],help='Model architecture')
+    argparser.add_argument('--use_augmentation', action='store_true', help='Enable data augmentation')
+    argparser.add_argument('--jitter_std', type=float, default=0.005, help='Standard deviation for jitter noise')
+    argparser.add_argument('--magnitude_range', type=float, nargs=2, default=[0.98, 1.02], help='Range for magnitude scaling')
+    argparser.add_argument('--aug_prob', type=float, default=0.3, help='Probability of applying augmentation')
+    argparser.add_argument('--prefix', type=str, default=timestamp, help='Experiment prefix/directory name')
+    argparser.add_argument('--early_stopping_patience', type=int, default=40, help='Early stopping patience for base phase')
+    argparser.add_argument('--early_stopping_patience_target', type=int, default=40, help='Early stopping patience for target phase')
+    argparser.add_argument('--mode', type=str, default='full_fine_tuning', choices=['full_fine_tuning', 'target_only', 'target_only_fine_tuning'], help='Mode')
+    argparser.add_argument('--lr', type=float, default=3e-4, help='Learning rate')
+    argparser.add_argument('--target_data_pct', type=float, default=1.0, help='Percentage of target training data to use (0.0-1.0)')
+    argparser.add_argument('--participants', type=str, nargs='+', default=['tonmoy','asfik','ejaz'], help='List of participant names for cross-validation')
+    argparser.add_argument('--window_size', type=int, default=3000, help='Window size in samples (e.g., 3000 = 60s at 50Hz)')
+    argparser.add_argument('--data_path', type=str, default='data/001_60s_window', help='Path to dataset directory')
+    argparser.add_argument('--n_base_participants', type=str, default='all', help='Number of base participants to use (integer or "all")')
+    return argparser
 
 def load_config(config_path):
     with open(config_path, 'r') as file:
