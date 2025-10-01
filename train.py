@@ -1,5 +1,4 @@
 import os
-from sympy import hyper
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset, ConcatDataset
@@ -255,34 +254,34 @@ while True:
         plot_loss_and_f1(lossi, new_exp_dir, metrics, patience_counter)
 
     epoch += 1
-    # print(f'Epoch {epoch}, Phase: {phase}, Time Elapsed: {time() - start_time:.2f}s, Patience Counter: {patience_counter}, Train F1: {train_f1:.4f}, Val Loss: {lossi[val_loss_key][-1]:.4f}, Val F1: {lossi[val_f1_key][-1]:.4f}')
-    print(f'Epoch {epoch}, Phase: {phase}, Time Elapsed: {time() - start_time:.2f}s, Train Loss: {train_loss:.4f}, Train F1: {train_f1:.4f}')
+    # print(f' Val Loss: {lossi[val_loss_key][-1]:.4f}, Val F1: {lossi[val_f1_key][-1]:.4f}')
+    print(f'Epoch {epoch}, Phase: {phase}, Time Elapsed: {time() - start_time:.2f}s, Train Loss: {train_loss:.4f}, Train F1: {train_f1:.4f}, Patience Counter: {patience_counter}')
 
 
-# # Evaluate best models on target test set
-# target_testloader = DataLoader(TensorDataset(*torch.load(f'{data_path}/{target_participant}_test.pt')), batch_size=batch_size)
-# # Evaluate best base model on target test set
-# if hyperparameters['mode'] == 'full_fine_tuning':
-#     model.load_state_dict(torch.load(f'{new_exp_dir}/best_base_model.pt'))
-#     model.to(device)
-#     test_loss, test_f1 = compute_loss_and_f1(model, target_testloader, criterion, device=device)
-#     metrics['best_base_model_target_test_loss'] = test_loss
-#     metrics['best_base_model_target_test_f1'] = test_f1
+# Evaluate best models on target test set
+target_testloader = DataLoader(TensorDataset(*torch.load(f'{data_path}/{target_participant}_test.pt')), batch_size=batch_size)
+# Evaluate best base model on target test set
+if hyperparameters['mode'] == 'full_fine_tuning':
+    model.load_state_dict(torch.load(f'{new_exp_dir}/best_base_model.pt'))
+    model.to(device)
+    test_loss, test_f1 = compute_loss_and_f1(model, target_testloader, criterion, device=device)
+    metrics['best_base_model_target_test_loss'] = test_loss
+    metrics['best_base_model_target_test_f1'] = test_f1
 
-# # Evaluate best target model on target test set
-# model.load_state_dict(torch.load(f'{new_exp_dir}/best_target_model.pt'))
-# model.to(device)
-# test_loss, test_f1 = compute_loss_and_f1(model, target_testloader, criterion, device=device)
-# metrics['best_target_model_target_test_loss'] = test_loss
-# metrics['best_target_model_target_test_f1'] = test_f1
+# Evaluate best target model on target test set
+model.load_state_dict(torch.load(f'{new_exp_dir}/best_target_model.pt'))
+model.to(device)
+test_loss, test_f1 = compute_loss_and_f1(model, target_testloader, criterion, device=device)
+metrics['best_target_model_target_test_loss'] = test_loss
+metrics['best_target_model_target_test_f1'] = test_f1
 
-# # Also evaluate best base model (from base phase) on target val set
-# if hyperparameters['mode'] == 'full_fine_tuning':
-#     metrics['best_base_model_target_val_loss'] = lossi['target val loss'][metrics['best_base_val_loss_epoch']]
-#     metrics['best_base_model_target_val_f1'] = lossi['target val f1'][metrics['best_base_val_loss_epoch']]
+# Also evaluate best base model (from base phase) on target val set
+if hyperparameters['mode'] == 'full_fine_tuning':
+    metrics['best_base_model_target_val_loss'] = lossi['target val loss'][metrics['best_base_val_loss_epoch']]
+    metrics['best_base_model_target_val_f1'] = lossi['target val f1'][metrics['best_base_val_loss_epoch']]
 
-# metrics['best_target_model_target_val_loss'] = lossi['target val loss'][metrics['best_target_val_loss_epoch']]
-# metrics['best_target_model_target_val_f1'] = lossi['target val f1'][metrics['best_target_val_loss_epoch']]
+metrics['best_target_model_target_val_loss'] = lossi['target val loss'][metrics['best_target_val_loss_epoch']]
+metrics['best_target_model_target_val_f1'] = lossi['target val f1'][metrics['best_target_val_loss_epoch']]
 
 from lib.train_utils import save_metrics_and_losses
 plot_loss_and_f1(lossi, new_exp_dir, metrics, patience_counter)
