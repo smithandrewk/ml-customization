@@ -21,7 +21,6 @@ import subprocess
 from itertools import product
 
 parser = argparse.ArgumentParser(description='Create participant-specific smoking detection dataset')
-parser.add_argument('--config', type=str, default='configs/train_config.yaml', help='Path to config file')
 parser.add_argument('--dry-run', action='store_true', help='Print commands without running them')
 parser.add_argument('--device', type=int, default=0, help='GPU device index')
 args = parser.parse_args()
