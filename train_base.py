@@ -82,6 +82,10 @@ def main():
             raise ValueError(f"n_base_participants ({n_base}) cannot exceed available base participants ({len(participants)})")
         participants = participants[:n_base]
 
+    # Validate we have at least one base participant
+    if len(participants) == 0:
+        raise ValueError(f"No base participants available for fold {fold}. Cannot train base model.")
+
     print(f"\n{'='*80}")
     print(f"Base Model Training")
     print(f"{'='*80}")
