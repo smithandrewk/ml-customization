@@ -1,38 +1,77 @@
 #!/usr/bin/env python3
 """
-Generate job configurations for distributed training.
-Similar to run.py but outputs jobs.json instead of running directly.
+Generate job configurations for two-phase distributed training.
+
+Phase 1: Train unique base models
+Phase 2: Fine-tune base models on different target participants/settings
 """
 
 import json
+import hashlib
 from itertools import product
+from collections import defaultdict
+from datetime import datetime
 
-# Grid search parameters (matching run.py)
+
+# Grid search parameters
 GRID_PARAMS = {
     'batch_size': [32, 64],
     'lr': [3e-4],
     'early_stopping_patience': [50],
-    'mode': ['full_fine_tuning','target_only_fine_tuning'],  # 'full_fine_tuning', 'target_only', 'target_only_fine_tuning'
-    'target_data_pct': [0.01,0.05,0.125,0.25, 0.5, 1.0],  # 0.05, 0.1, 0.25, 0.5, 1.0
-    'n_base_participants': [1,2,3,4,5,6],  # 1, 2, 'all'
+    'mode': ['full_fine_tuning', 'target_only_fine_tuning'],
+    'target_data_pct': [0.01, 0.05, 0.125, 0.25, 0.5, 1.0],
+    'n_base_participants': [1, 2, 3, 4, 5, 6],
 }
 
-# Fixed parameters (matching run.py)
+# Fixed parameters
 FIXED_PARAMS = {
     'model': 'test',
     'data_path': 'data/001_60s_window',
-    'participants': ['tonmoy', 'asfik','alsaad','anam','ejaz','iftakhar','unk1'],
+    'participants': ['tonmoy', 'asfik', 'alsaad', 'anam', 'ejaz', 'iftakhar', 'unk1'],
     'window_size': 3000,
     'use_augmentation': True,
     'early_stopping_patience_target': 50,
+    'jitter_std': 0.005,
+    'magnitude_range': [0.98, 1.02],
+    'aug_prob': 0.3,
 }
 
-# Prefix for experiment directories
-from datetime import datetime
 
-def generate_jobs():
-    """Generate all job combinations."""
-    jobs = []
+def compute_base_model_hash(config):
+    """
+    Compute hash from base model configuration.
+
+    Only includes parameters that affect base model training,
+    excludes fine-tuning parameters like mode, target_data_pct, etc.
+    """
+    # Parameters that define a unique base model
+    base_config = {
+        'fold': config['fold'],
+        'n_base_participants': config['n_base_participants'],
+        'model': config['model'],
+        'data_path': config['data_path'],
+        'window_size': config['window_size'],
+        'batch_size': config['batch_size'],
+        'lr': config['lr'],
+        'early_stopping_patience': config['early_stopping_patience'],
+        'use_augmentation': config['use_augmentation'],
+        'participants': config['participants'],  # Full list affects which are base
+    }
+
+    # Add augmentation params if augmentation is enabled
+    if config['use_augmentation']:
+        base_config['jitter_std'] = config.get('jitter_std', 0.005)
+        base_config['magnitude_range'] = config.get('magnitude_range', [0.98, 1.02])
+        base_config['aug_prob'] = config.get('aug_prob', 0.3)
+
+    # Create deterministic string representation
+    config_str = json.dumps(base_config, sort_keys=True)
+    return hashlib.sha256(config_str.encode()).hexdigest()[:16]
+
+
+def generate_all_experiment_configs():
+    """Generate all experiment configurations from grid search."""
+    configs = []
 
     # Get all combinations of grid parameters
     param_names = list(GRID_PARAMS.keys())
@@ -46,24 +85,142 @@ def generate_jobs():
 
         # Run all folds
         for fold in range(len(FIXED_PARAMS['participants'])):
-            job = {
+            config = {
                 'fold': fold,
                 'prefix': prefix,
                 **params,
                 **FIXED_PARAMS
             }
-            jobs.append(job)
+            configs.append(config)
 
-    return jobs
+    return configs
+
+
+def generate_two_phase_jobs():
+    """
+    Generate base training jobs and fine-tuning jobs.
+
+    Returns:
+        tuple: (base_jobs, finetune_jobs)
+    """
+    # Generate all experiment configs
+    all_configs = generate_all_experiment_configs()
+
+    print(f"Total experiment configurations: {len(all_configs)}")
+
+    # Group configs by base model hash
+    base_model_groups = defaultdict(list)
+
+    for config in all_configs:
+        base_hash = compute_base_model_hash(config)
+        base_model_groups[base_hash].append(config)
+
+    print(f"Unique base models needed: {len(base_model_groups)}")
+
+    # Generate base training jobs (one per unique base model)
+    base_jobs = []
+    for base_hash, configs in base_model_groups.items():
+        # Use the first config from this group to create the base training job
+        # All configs in the group share the same base model parameters
+        reference_config = configs[0]
+
+        # Create base training job with only base-relevant parameters
+        base_job = {
+            'fold': reference_config['fold'],
+            'device': 0,  # Will be set by distributed training system
+            'batch_size': reference_config['batch_size'],
+            'model': reference_config['model'],
+            'prefix': f"base_{base_hash}",
+            'lr': reference_config['lr'],
+            'early_stopping_patience': reference_config['early_stopping_patience'],
+            'early_stopping_patience_target': reference_config['early_stopping_patience_target'],
+            'mode': 'full_fine_tuning',  # Doesn't matter for base training
+            'target_data_pct': 1.0,  # Doesn't matter for base training
+            'n_base_participants': reference_config['n_base_participants'],
+            'data_path': reference_config['data_path'],
+            'window_size': reference_config['window_size'],
+            'participants': reference_config['participants'],
+            'use_augmentation': reference_config['use_augmentation'],
+        }
+
+        if reference_config['use_augmentation']:
+            base_job['jitter_std'] = reference_config['jitter_std']
+            base_job['magnitude_range'] = reference_config['magnitude_range']
+            base_job['aug_prob'] = reference_config['aug_prob']
+
+        # Add hash for tracking
+        base_job['_base_model_hash'] = base_hash
+        base_job['_num_dependent_jobs'] = len(configs)
+
+        base_jobs.append(base_job)
+
+    # Generate fine-tuning jobs (all original configs, with base_model_hash added)
+    finetune_jobs = []
+    for config in all_configs:
+        base_hash = compute_base_model_hash(config)
+
+        finetune_job = config.copy()
+        finetune_job['base_model_hash'] = base_hash
+        finetune_job['device'] = 0  # Will be set by distributed training system
+
+        finetune_jobs.append(finetune_job)
+
+    return base_jobs, finetune_jobs
+
+
+def main():
+    """Generate and save job configurations."""
+    base_jobs, finetune_jobs = generate_two_phase_jobs()
+
+    # Save base training jobs
+    with open('base_training_jobs.json', 'w') as f:
+        json.dump(base_jobs, f, indent=2)
+
+    # Save fine-tuning jobs
+    with open('finetune_jobs.json', 'w') as f:
+        json.dump(finetune_jobs, f, indent=2)
+
+    # Print summary
+    print(f"\n{'='*80}")
+    print(f"Job Generation Summary")
+    print(f"{'='*80}")
+    print(f"Base training jobs: {len(base_jobs)}")
+    print(f"Fine-tuning jobs: {len(finetune_jobs)}")
+    print(f"Total jobs: {len(base_jobs) + len(finetune_jobs)}")
+    print(f"\nFiles created:")
+    print(f"  - base_training_jobs.json ({len(base_jobs)} jobs)")
+    print(f"  - finetune_jobs.json ({len(finetune_jobs)} jobs)")
+    print(f"{'='*80}\n")
+
+    # Print example breakdown
+    print("Example: Jobs sharing the same base model")
+    if base_jobs:
+        example_hash = base_jobs[0]['_base_model_hash']
+        example_jobs = [j for j in finetune_jobs if j['base_model_hash'] == example_hash]
+        print(f"Base model hash: {example_hash}")
+        print(f"Number of fine-tuning jobs using this base: {len(example_jobs)}")
+        print(f"Fold: {base_jobs[0]['fold']}")
+        print(f"Base participants (n={base_jobs[0]['n_base_participants']})")
+        print(f"\nThese {len(example_jobs)} jobs differ only in:")
+        modes = set(j['mode'] for j in example_jobs)
+        target_pcts = set(j['target_data_pct'] for j in example_jobs)
+        print(f"  - mode: {modes}")
+        print(f"  - target_data_pct: {sorted(target_pcts)}")
+        print()
+
+    print("Next steps:")
+    print("1. Train base models:")
+    print("   python run_distributed_training.py \\")
+    print("       --cluster-config cluster_config.json \\")
+    print("       --jobs-config base_training_jobs.json \\")
+    print("       --script-path train_base.py")
+    print()
+    print("2. Fine-tune on targets:")
+    print("   python run_distributed_training.py \\")
+    print("       --cluster-config cluster_config.json \\")
+    print("       --jobs-config finetune_jobs.json \\")
+    print("       --script-path train_finetune.py")
+
 
 if __name__ == '__main__':
-    jobs = generate_jobs()
-
-    # Save to jobs_config.json
-    with open('jobs_config.json', 'w') as f:
-        json.dump(jobs, f, indent=2)
-
-    print(f"Generated {len(jobs)} jobs")
-    print(f"Saved to: jobs_config.json")
-    print(f"\nRun with:")
-    print(f"  python run_distributed_training.py --cluster-config cluster_config.json --jobs-config jobs_config.json")
+    main()

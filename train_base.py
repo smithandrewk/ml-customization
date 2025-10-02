@@ -1,0 +1,264 @@
+#!/usr/bin/env python3
+"""
+Train base models for shared use across multiple fine-tuning experiments.
+
+This script trains ONLY the base model (no fine-tuning on target participant).
+The trained model is saved with a hash-based identifier for reuse.
+"""
+
+import torch
+from torch import nn
+from torch.utils.data import DataLoader, TensorDataset, ConcatDataset
+import os
+import argparse
+import hashlib
+import json
+from time import time
+
+from lib.train_utils import *
+
+
+def compute_base_model_hash(config):
+    """
+    Compute hash from base model configuration.
+
+    Only includes parameters that affect base model training,
+    excludes fine-tuning parameters like mode, target_data_pct, etc.
+    """
+    # Parameters that define a unique base model
+    base_config = {
+        'fold': config['fold'],
+        'n_base_participants': config['n_base_participants'],
+        'model': config['model'],
+        'data_path': config['data_path'],
+        'window_size': config['window_size'],
+        'batch_size': config['batch_size'],
+        'lr': config['lr'],
+        'early_stopping_patience': config['early_stopping_patience'],
+        'use_augmentation': config['use_augmentation'],
+        'participants': config['participants'],  # Full list affects which are base
+    }
+
+    # Add augmentation params if augmentation is enabled
+    if config['use_augmentation']:
+        base_config['jitter_std'] = config.get('jitter_std', 0.005)
+        base_config['magnitude_range'] = config.get('magnitude_range', [0.98, 1.02])
+        base_config['aug_prob'] = config.get('aug_prob', 0.3)
+
+    # Create deterministic string representation
+    config_str = json.dumps(base_config, sort_keys=True)
+    return hashlib.sha256(config_str.encode()).hexdigest()[:16]
+
+
+def main():
+    # Parse arguments
+    argparser = argparse.ArgumentParser(description='Train base model for shared use')
+    argparser = add_arguments(argparser)
+    args = argparser.parse_args()
+
+    # Check that data_path exists
+    if not os.path.exists(args.data_path):
+        raise ValueError(f"Data path {args.data_path} does not exist.")
+
+    hyperparameters = vars(args)
+
+    # Extract key parameters
+    fold = hyperparameters['fold']
+    device = hyperparameters['device']
+    batch_size = hyperparameters['batch_size']
+    data_path = hyperparameters['data_path']
+    participants = hyperparameters['participants'].copy()  # Copy to avoid modifying original
+
+    # Determine target participant and base participants
+    target_participant = participants[fold]
+    hyperparameters['target_participant'] = target_participant
+    participants.remove(target_participant)
+
+    # Apply n_base_participants constraint
+    n_base = hyperparameters['n_base_participants']
+    if n_base != 'all':
+        n_base = int(n_base)
+        if n_base > len(participants):
+            raise ValueError(f"n_base_participants ({n_base}) cannot exceed available base participants ({len(participants)})")
+        participants = participants[:n_base]
+
+    print(f"\n{'='*80}")
+    print(f"Base Model Training")
+    print(f"{'='*80}")
+    print(f"Target participant (excluded): {target_participant}")
+    print(f"Base participants: {participants}")
+    print(f"Number of base participants: {len(participants)}")
+
+    # Compute base model hash
+    base_model_hash = compute_base_model_hash(hyperparameters)
+    print(f"Base model hash: {base_model_hash}")
+    print(f"{'='*80}\n")
+
+    # Create base_models directory
+    os.makedirs('base_models', exist_ok=True)
+
+    # Check if this base model already exists
+    base_model_path = f'base_models/{base_model_hash}.pt'
+    metadata_path = f'base_models/{base_model_hash}_metadata.json'
+
+    if os.path.exists(base_model_path):
+        print(f"Base model already exists at {base_model_path}")
+        print(f"Skipping training. Delete the file to retrain.")
+        return
+
+    # Load base participant data
+    print("Loading base participant data...")
+    base_train_dataset = ConcatDataset([
+        TensorDataset(*torch.load(f'{data_path}/{p}_{s}.pt'))
+        for p in participants
+        for s in ['train', 'val']
+    ])
+    base_val_dataset = ConcatDataset([
+        TensorDataset(*torch.load(f'{data_path}/{p}_test.pt'))
+        for p in participants
+    ])
+
+    print(f'Base train dataset size: {len(base_train_dataset)}')
+    base_train_dataset = random_subsample(base_train_dataset, 1)
+    print(f'Base train dataset size after subsampling: {len(base_train_dataset)}')
+
+    print(f'Base val dataset size: {len(base_val_dataset)}')
+    base_val_dataset = random_subsample(base_val_dataset, .5)
+    print(f'Base val dataset size after subsampling: {len(base_val_dataset)}')
+
+    # Create data loaders
+    base_trainloader = DataLoader(base_train_dataset, batch_size=batch_size, shuffle=True)
+    base_valloader = DataLoader(base_val_dataset, batch_size=batch_size, shuffle=False)
+
+    # Create model
+    model_type = hyperparameters['model']
+    from lib.models import TestModel
+    model = TestModel()
+    model.to(device)
+
+    criterion = nn.BCEWithLogitsLoss()
+    optimizer = torch.optim.AdamW(model.parameters(), lr=hyperparameters['lr'])
+
+    print(f'Using model: {model.__class__.__name__}')
+    print(f'Total model parameters: {sum(p.numel() for p in model.parameters())}')
+
+    # Setup augmentation if enabled
+    augmenter = None
+    if hyperparameters['use_augmentation']:
+        from lib.utils import TimeSeriesAugmenter
+        augmenter = TimeSeriesAugmenter({
+            'jitter_noise_std': hyperparameters['jitter_std'],
+            'magnitude_scale_range': hyperparameters['magnitude_range'],
+            'augmentation_probability': hyperparameters['aug_prob']
+        })
+        print(f'Data augmentation enabled: jitter_std={hyperparameters["jitter_std"]}, '
+              f'magnitude_range={hyperparameters["magnitude_range"]}, '
+              f'aug_prob={hyperparameters["aug_prob"]}')
+
+    # Training metrics
+    metrics = {
+        'best_val_loss': None,
+        'best_val_loss_epoch': None,
+        'best_val_f1': None,
+        'best_val_f1_epoch': None,
+        'total_epochs': 0,
+    }
+
+    lossi = {
+        'train_loss': [],
+        'train_f1': [],
+        'val_loss': [],
+        'val_f1': [],
+    }
+
+    # Training loop
+    epoch = 0
+    best_val_loss = float('inf')
+    patience_counter = 0
+    early_stopping_patience = hyperparameters['early_stopping_patience']
+
+    print(f"\nStarting base model training (max {early_stopping_patience} epochs patience)...\n")
+
+    while True:
+        if epoch >= 500:
+            print("Maximum epochs reached (500).")
+            break
+
+        start_time = time()
+
+        # Training step
+        model.train()
+        train_loss, train_f1 = optimize_model_compute_loss_and_f1(
+            model, base_trainloader, optimizer, criterion,
+            device=device, augmenter=augmenter
+        )
+        lossi['train_loss'].append(train_loss)
+        lossi['train_f1'].append(train_f1)
+
+        # Validation step
+        loss, f1 = compute_loss_and_f1(model, base_valloader, criterion, device=device)
+        lossi['val_loss'].append(loss)
+        lossi['val_f1'].append(f1)
+
+        # Early stopping based on validation loss
+        if loss < best_val_loss:
+            best_val_loss = loss
+            metrics['best_val_loss'] = best_val_loss
+            metrics['best_val_loss_epoch'] = epoch
+            torch.save(model.state_dict(), f'{base_model_path}.tmp')
+            patience_counter = 0
+        else:
+            patience_counter += 1
+
+        # Track best F1
+        if f1 > (metrics['best_val_f1'] or 0):
+            metrics['best_val_f1'] = f1
+            metrics['best_val_f1_epoch'] = epoch
+
+        # Check early stopping
+        if patience_counter >= early_stopping_patience:
+            print(f"\nEarly stopping triggered at epoch {epoch}")
+            break
+
+        # Progress output
+        if epoch % 5 == 0:
+            print(f'Epoch {epoch:3d} | Train Loss: {train_loss:.4f}, Train F1: {train_f1:.4f} | '
+                  f'Val Loss: {loss:.4f}, Val F1: {f1:.4f} | Patience: {patience_counter}/{early_stopping_patience}')
+
+        epoch += 1
+
+    metrics['total_epochs'] = epoch
+
+    # Move best model to final location
+    if os.path.exists(f'{base_model_path}.tmp'):
+        os.rename(f'{base_model_path}.tmp', base_model_path)
+        print(f"\n{'='*80}")
+        print(f"Base model saved to: {base_model_path}")
+        print(f"Best validation loss: {metrics['best_val_loss']:.4f} (epoch {metrics['best_val_loss_epoch']})")
+        print(f"Best validation F1: {metrics['best_val_f1']:.4f} (epoch {metrics['best_val_f1_epoch']})")
+        print(f"Total epochs trained: {metrics['total_epochs']}")
+        print(f"{'='*80}\n")
+    else:
+        print("Warning: No best model was saved (training may have failed)")
+        return
+
+    # Save metadata
+    metadata = {
+        'base_model_hash': base_model_hash,
+        'config': hyperparameters,
+        'target_participant': target_participant,
+        'base_participants': participants,
+        'metrics': metrics,
+        'losses': lossi,
+    }
+
+    with open(metadata_path, 'w') as f:
+        json.dump(metadata, f, indent=2)
+
+    print(f"Metadata saved to: {metadata_path}")
+    print(f"\nBase model training complete!")
+    print(f"Hash: {base_model_hash}")
+
+
+if __name__ == '__main__':
+    main()
