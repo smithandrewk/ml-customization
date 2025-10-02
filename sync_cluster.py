@@ -118,12 +118,12 @@ def sync_cluster(cluster_config_path: str, clean_experiments: bool = False,
 
         # Git pull
         if git_pull:
-            # First checkout feature/distributed-training branch
-            checkout_cmd = f"{base_cmd} && git fetch origin && git checkout feature/distributed-training"
+            # First checkout main branch
+            checkout_cmd = f"{base_cmd} && git fetch origin && git checkout main"
             returncode, stdout, stderr = run_command_on_server(server, checkout_cmd, verbose)
 
             if returncode == 0:
-                print(f"[{host_string}] ✓ Checked out feature/distributed-training")
+                print(f"[{host_string}] ✓ Checked out main")
             else:
                 print(f"[{host_string}] ✗ Failed to checkout branch - continuing anyway")
                 print(f"[{host_string}] ⚠ Warning: May be on wrong branch")
@@ -138,8 +138,8 @@ def sync_cluster(cluster_config_path: str, clean_experiments: bool = False,
                 # If git pull fails, try to fetch and reset to origin
                 print(f"[{host_string}] Regular git pull failed, trying fetch and reset...")
 
-                # Fetch and reset to feature/distributed-training
-                reset_cmd = f"{base_cmd} && git fetch origin && git reset --hard origin/feature/distributed-training"
+                # Fetch and reset to main
+                reset_cmd = f"{base_cmd} && git fetch origin && git reset --hard origin/main"
                 returncode, stdout, stderr = run_command_on_server(server, reset_cmd, verbose)
 
                 if returncode == 0:

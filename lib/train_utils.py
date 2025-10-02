@@ -260,3 +260,64 @@ def evaluate(model, dataloader, device):
     ConfusionMatrixDisplay.from_predictions(y_true, y_pred,normalize='true')
     ConfusionMatrixDisplay.from_predictions(y_true, y_pred,normalize='pred')
     return y_true,y_pred
+
+class TimeSeriesAugmenter:
+    """Time-series specific data augmentation for accelerometer data."""
+    
+    def __init__(self, config):
+        self.jitter_std = config.get('jitter_noise_std', 0.01)
+        self.magnitude_range = config.get('magnitude_scale_range', [0.9, 1.1])
+        self.time_warp_sigma = config.get('time_warp_sigma', 0.2)
+        self.prob = config.get('augmentation_probability', 0.5)
+    
+    def jitter(self, X):
+        """Add random noise to time series."""
+        noise = torch.randn_like(X) * self.jitter_std
+        return X + noise
+    
+    def magnitude_scale(self, X):
+        """Scale magnitude of time series."""
+        scale = torch.FloatTensor(1).uniform_(*self.magnitude_range).item()
+        return X * scale
+    
+    def time_warp(self, X):
+        """Apply time warping to time series."""
+        batch_size, seq_len, features = X.shape
+        
+        # Create random warp factors
+        warp_steps = max(1, int(seq_len * 0.1))  # 10% of sequence length
+        warp_locs = torch.randint(warp_steps, seq_len - warp_steps, (batch_size,))
+        warp_factors = torch.normal(1.0, self.time_warp_sigma, (batch_size,))
+        
+        # Apply warping (simplified version)
+        warped_X = X.clone()
+        for i in range(batch_size):
+            if torch.rand(1) < 0.5:  # 50% chance to apply warping
+                loc = warp_locs[i]
+                factor = warp_factors[i]
+                
+                # Simple implementation: just scale a portion of the signal
+                start_idx = max(0, loc - warp_steps // 2)
+                end_idx = min(seq_len, loc + warp_steps // 2)
+                warped_X[i, start_idx:end_idx] *= factor
+        
+        return warped_X
+    
+    def augment(self, X, y):
+        """Apply random augmentation to batch."""
+        if torch.rand(1) > self.prob:
+            return X, y
+        
+        X_aug = X.clone()
+        
+        # Randomly select augmentation type
+        aug_type = torch.randint(0, 3, (1,)).item()
+        
+        if aug_type == 0:
+            X_aug = self.jitter(X_aug)
+        elif aug_type == 1:
+            X_aug = self.magnitude_scale(X_aug)
+        else:  # aug_type == 2
+            X_aug = self.time_warp(X_aug)
+        
+        return X_aug, y
