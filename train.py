@@ -41,6 +41,7 @@ else:
     # Apply n_base_participants constraint
     n_base = hyperparameters['n_base_participants']
     if n_base != 'all':
+        n_base = int(n_base)
         if n_base > len(participants):
             raise ValueError(f"n_base_participants ({n_base}) cannot exceed available base participants ({len(participants)})")
         participants = participants[:n_base]
