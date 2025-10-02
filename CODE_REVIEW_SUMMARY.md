@@ -87,7 +87,9 @@ base_config = {
 ```
 
 **Potential Issues Found:**
-- None - hash computation is consistent
+- Fixed: target_only mode was sweeping across n_base_participants unnecessarily
+  - Now target_only jobs skip n_base_participants sweep (it's irrelevant)
+  - Prevents duplicate jobs that differ only in an unused parameter
 
 ---
 

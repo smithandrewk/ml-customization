@@ -73,25 +73,60 @@ def generate_all_experiment_configs():
     """Generate all experiment configurations from grid search."""
     configs = []
 
-    # Get all combinations of grid parameters
-    param_names = list(GRID_PARAMS.keys())
-    param_values = list(GRID_PARAMS.values())
+    # Separate modes that need base participants from those that don't
+    modes_needing_base = [m for m in GRID_PARAMS['mode'] if m != 'target_only']
+    target_only_mode = 'target_only' in GRID_PARAMS['mode']
 
-    for param_combo in product(*param_values):
-        params = dict(zip(param_names, param_combo))
+    # Generate configs for modes that need base participants
+    if modes_needing_base:
+        # Full grid search including n_base_participants
+        grid_params_with_base = GRID_PARAMS.copy()
+        grid_params_with_base['mode'] = modes_needing_base
 
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        prefix = f"b{params['batch_size']}_t{params['target_data_pct']}_{timestamp}"
+        param_names = list(grid_params_with_base.keys())
+        param_values = list(grid_params_with_base.values())
 
-        # Run all folds
-        for fold in range(len(FIXED_PARAMS['participants'])):
-            config = {
-                'fold': fold,
-                'prefix': prefix,
-                **params,
-                **FIXED_PARAMS
-            }
-            configs.append(config)
+        for param_combo in product(*param_values):
+            params = dict(zip(param_names, param_combo))
+
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            prefix = f"b{params['batch_size']}_t{params['target_data_pct']}_{timestamp}"
+
+            # Run all folds
+            for fold in range(len(FIXED_PARAMS['participants'])):
+                config = {
+                    'fold': fold,
+                    'prefix': prefix,
+                    **params,
+                    **FIXED_PARAMS
+                }
+                configs.append(config)
+
+    # Generate configs for target_only mode (no n_base_participants sweep)
+    if target_only_mode:
+        # Grid search WITHOUT n_base_participants (it's irrelevant for target_only)
+        grid_params_target_only = {k: v for k, v in GRID_PARAMS.items() if k != 'n_base_participants'}
+        grid_params_target_only['mode'] = ['target_only']
+
+        param_names = list(grid_params_target_only.keys())
+        param_values = list(grid_params_target_only.values())
+
+        for param_combo in product(*param_values):
+            params = dict(zip(param_names, param_combo))
+
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            prefix = f"b{params['batch_size']}_t{params['target_data_pct']}_{timestamp}"
+
+            # Run all folds
+            for fold in range(len(FIXED_PARAMS['participants'])):
+                config = {
+                    'fold': fold,
+                    'prefix': prefix,
+                    **params,
+                    'n_base_participants': 'all',  # Irrelevant but needed for consistency
+                    **FIXED_PARAMS
+                }
+                configs.append(config)
 
     return configs
 

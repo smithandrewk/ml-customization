@@ -188,6 +188,32 @@ python3 run_two_phase_distributed.py \
     --finetune-jobs my_finetune_jobs.json
 ```
 
+## Important Notes
+
+### Grid Search and target_only Mode
+
+When using `target_only` mode in your grid search, `generate_jobs.py` intelligently handles the `n_base_participants` parameter:
+
+- For `full_fine_tuning` and `target_only_fine_tuning`: Full sweep across `n_base_participants` values
+- For `target_only`: **Skips** `n_base_participants` sweep (since it's irrelevant)
+
+Example:
+```python
+GRID_PARAMS = {
+    'batch_size': [32, 64],
+    'mode': ['full_fine_tuning', 'target_only'],
+    'n_base_participants': [1, 2, 3],
+    # ... other params
+}
+
+# Results in:
+# - full_fine_tuning: 2 batch_sizes × 3 n_base = 6 configs per fold
+# - target_only: 2 batch_sizes × 1 (no n_base sweep) = 2 configs per fold
+# Total: 8 configs per fold (not 12!)
+```
+
+This prevents duplicate `target_only` jobs that differ only in an irrelevant parameter.
+
 ## Files and Directories
 
 ```

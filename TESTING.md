@@ -50,6 +50,9 @@ head -40 finetune_jobs.json
 - Fine-tune jobs should have `base_model_hash` field
 - `mode: 'full_fine_tuning'` jobs should have base_model_hash != null
 - `mode: 'target_only'` jobs (if any) should have base_model_hash = null
+- **Important:** `target_only` jobs should NOT duplicate across `n_base_participants`
+  - If you have 6 n_base_participants values, full_fine_tuning should have 6× jobs
+  - But target_only should only have 1× jobs (n_base_participants is irrelevant)
 
 ---
 
