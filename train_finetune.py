@@ -21,8 +21,8 @@ def main():
     # Parse arguments
     argparser = argparse.ArgumentParser(description='Fine-tune base model on target participant')
     argparser = add_arguments(argparser)
-    argparser.add_argument('--base_model_hash', type=str, required=True,
-                          help='Hash of the base model to load')
+    argparser.add_argument('--base_model_hash', type=str, required=False, default=None,
+                          help='Hash of the base model to load (not needed for target_only mode)')
     args = argparser.parse_args()
 
     # Check that data_path exists
@@ -37,7 +37,7 @@ def main():
     batch_size = hyperparameters['batch_size']
     data_path = hyperparameters['data_path']
     experiment_prefix = hyperparameters['prefix']
-    base_model_hash = hyperparameters['base_model_hash']
+    base_model_hash = hyperparameters.get('base_model_hash')
     mode = hyperparameters['mode']
     target_data_pct = hyperparameters['target_data_pct']
 
@@ -49,42 +49,71 @@ def main():
     new_exp_dir = f'experiments/{experiment_prefix}/fold{fold}_{target_participant}'
     os.makedirs(new_exp_dir, exist_ok=False)
 
-    print(f"\n{'='*80}")
-    print(f"Fine-Tuning from Base Model")
-    print(f"{'='*80}")
-    print(f"Base model hash: {base_model_hash}")
-    print(f"Target participant: {target_participant}")
-    print(f"Mode: {mode}")
-    print(f"Target data percentage: {target_data_pct}")
-    print(f"Experiment directory: {new_exp_dir}")
-    print(f"{'='*80}\n")
+    # Check mode and base_model_hash compatibility
+    if mode == 'target_only':
+        # target_only mode trains from scratch, no base model needed
+        print(f"\n{'='*80}")
+        print(f"Training from Scratch (target_only mode)")
+        print(f"{'='*80}")
+        print(f"Target participant: {target_participant}")
+        print(f"Mode: {mode}")
+        print(f"Target data percentage: {target_data_pct}")
+        print(f"Experiment directory: {new_exp_dir}")
+        print(f"{'='*80}\n")
 
-    # Load base model
-    base_model_path = f'base_models/{base_model_hash}.pt'
-    metadata_path = f'base_models/{base_model_hash}_metadata.json'
+        # Create model from scratch
+        model_type = hyperparameters['model']
+        from lib.models import TestModel
+        model = TestModel()
+        model.to(device)
 
-    if not os.path.exists(base_model_path):
-        raise ValueError(f"Base model not found: {base_model_path}. "
-                        f"Train it first with train_base.py")
+        print(f"Initialized fresh model: {model.__class__.__name__}")
+        print(f"Total model parameters: {sum(p.numel() for p in model.parameters())}\n")
 
-    if not os.path.exists(metadata_path):
-        raise ValueError(f"Base model metadata not found: {metadata_path}")
+    else:
+        # Other modes require a base model
+        if not base_model_hash:
+            raise ValueError(f"Mode '{mode}' requires --base_model_hash parameter")
 
-    # Load and verify metadata
-    with open(metadata_path, 'r') as f:
-        base_metadata = json.load(f)
+        print(f"\n{'='*80}")
+        print(f"Fine-Tuning from Base Model")
+        print(f"{'='*80}")
+        print(f"Base model hash: {base_model_hash}")
+        print(f"Target participant: {target_participant}")
+        print(f"Mode: {mode}")
+        print(f"Target data percentage: {target_data_pct}")
+        print(f"Experiment directory: {new_exp_dir}")
+        print(f"{'='*80}\n")
 
-    print(f"Loading base model from: {base_model_path}")
-    print(f"Base model was trained on: {base_metadata['base_participants']}")
-    print(f"Base model best val loss: {base_metadata['metrics']['best_val_loss']:.4f}")
-    print(f"Base model best val F1: {base_metadata['metrics']['best_val_f1']:.4f}\n")
+        # Load base model
+        base_model_path = f'base_models/{base_model_hash}.pt'
+        metadata_path = f'base_models/{base_model_hash}_metadata.json'
 
-    # Create model and load base weights
-    model_type = hyperparameters['model']
-    from lib.models import TestModel
-    model = TestModel()
-    model.load_state_dict(torch.load(base_model_path))
-    model.to(device)
+        if not os.path.exists(base_model_path):
+            raise ValueError(f"Base model not found: {base_model_path}. "
+                            f"Train it first with train_base.py")
+
+        if not os.path.exists(metadata_path):
+            raise ValueError(f"Base model metadata not found: {metadata_path}")
+
+        # Load and verify metadata
+        with open(metadata_path, 'r') as f:
+            base_metadata = json.load(f)
+
+        print(f"Loading base model from: {base_model_path}")
+        print(f"Base model was trained on: {base_metadata['base_participants']}")
+        print(f"Base model best val loss: {base_metadata['metrics']['best_val_loss']:.4f}")
+        print(f"Base model best val F1: {base_metadata['metrics']['best_val_f1']:.4f}\n")
+
+        # Create model and load base weights
+        model_type = hyperparameters['model']
+        from lib.models import TestModel
+        model = TestModel()
+        model.load_state_dict(torch.load(base_model_path))
+        model.to(device)
+
+        print(f'Using model: {model.__class__.__name__}')
+        print(f'Total model parameters: {sum(p.numel() for p in model.parameters())}')
 
     criterion = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=hyperparameters['lr'])
@@ -139,13 +168,13 @@ def main():
         train_dataset = ConcatDataset([base_train_dataset, target_train_dataset])
         print(f'Combined training dataset size: {len(train_dataset)}')
 
-    elif mode == 'target_only_fine_tuning':
-        # Train only on target data
-        print("\nMode: target_only_fine_tuning - Training on target data only")
+    elif mode in ['target_only_fine_tuning', 'target_only']:
+        # Train only on target data (no base participants)
+        print(f"\nMode: {mode} - Training on target data only")
         train_dataset = target_train_dataset
 
     else:
-        raise ValueError(f"Invalid mode: {mode}. Must be 'full_fine_tuning' or 'target_only_fine_tuning'")
+        raise ValueError(f"Invalid mode: {mode}. Must be 'full_fine_tuning', 'target_only_fine_tuning', or 'target_only'")
 
     # Create data loaders
     trainloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)

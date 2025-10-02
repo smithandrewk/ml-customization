@@ -108,10 +108,18 @@ def generate_two_phase_jobs():
 
     print(f"Total experiment configurations: {len(all_configs)}")
 
-    # Group configs by base model hash
+    # Separate configs that need base models from those that don't
+    # target_only mode trains from scratch, no base model needed
+    configs_needing_base = [c for c in all_configs if c['mode'] != 'target_only']
+    configs_no_base = [c for c in all_configs if c['mode'] == 'target_only']
+
+    print(f"Configs needing base models: {len(configs_needing_base)}")
+    print(f"Configs without base models (target_only): {len(configs_no_base)}")
+
+    # Group configs by base model hash (only for those needing base models)
     base_model_groups = defaultdict(list)
 
-    for config in all_configs:
+    for config in configs_needing_base:
         base_hash = compute_base_model_hash(config)
         base_model_groups[base_hash].append(config)
 
@@ -154,15 +162,22 @@ def generate_two_phase_jobs():
 
         base_jobs.append(base_job)
 
-    # Generate fine-tuning jobs (all original configs, with base_model_hash added)
+    # Generate fine-tuning jobs (all original configs, with base_model_hash added where needed)
     finetune_jobs = []
-    for config in all_configs:
-        base_hash = compute_base_model_hash(config)
 
+    # Jobs that need base models
+    for config in configs_needing_base:
+        base_hash = compute_base_model_hash(config)
         finetune_job = config.copy()
         finetune_job['base_model_hash'] = base_hash
         finetune_job['device'] = 0  # Will be set by distributed training system
+        finetune_jobs.append(finetune_job)
 
+    # Jobs that don't need base models (target_only)
+    for config in configs_no_base:
+        finetune_job = config.copy()
+        finetune_job['base_model_hash'] = None  # No base model needed
+        finetune_job['device'] = 0  # Will be set by distributed training system
         finetune_jobs.append(finetune_job)
 
     return base_jobs, finetune_jobs
