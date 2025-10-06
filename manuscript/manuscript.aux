@@ -1,128 +1,76 @@
 \relax 
-\citation{yang2022jitai}
-\citation{leppin2025perspectives}
-\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{}\protected@file@percent }
-\newlabel{sec:introduction}{{1}{1}}
-\@writefile{toc}{\contentsline {section}{\numberline {2}Related Work}{1}{}\protected@file@percent }
-\newlabel{sec:related_work}{{2}{1}}
-\citation{mobile2023interventions}
-\citation{ehealth2024systematic}
-\citation{smartband2024feasibility}
-\citation{ml2023prediction,behavioral2024activation}
-\citation{jmir2024sensors}
-\citation{senyurek2020cnn}
-\citation{abotabik2020smart}
-\citation{smoking_realtime_2022}
-\citation{wang2022deep,zhang2022deep_har,wang2019deep_HAR}
-\citation{kiranyaz2021d}
-\citation{1d_cnn_har_2021}
-\citation{cnn_lstm_2023,ordonez2016deep}
-\citation{oord2016wavenet,dilated_multivariate_2019}
-\citation{dilated_attention_2021}
-\citation{dilated_attention_2021}
-\citation{gait_analysis_2024}
-\citation{student_activity_2024,singh2024hybrid}
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Digital Health Interventions for Smoking Cessation}{2}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Smoking Detection Using Wearable Sensors}{2}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Deep Learning for Wearable Sensor Data}{2}{}\protected@file@percent }
-\citation{chato2023survey}
-\citation{pan2010survey,weiss2016survey}
-\citation{fu2021personalized}
-\citation{liu2024cattle}
-\citation{roy2024fewshot}
-\citation{shah2023emergence}
-\citation{hsieh2023distilling,howard2018universal}
-\citation{biomedical_tsc_2022}
-\citation{gait_analysis_2024}
-\citation{patient_monitoring_2020}
-\citation{wpt_health_2024}
-\citation{lecun2015deep,goodfellow2016deep,rajpurkar2022ai,esteva2021deep,topol2019high}
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.4}Transfer Learning and Personalization in Healthcare}{3}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.5}Time Series Classification for Biomedical Applications}{3}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.6}Positioning of Our Contributions}{3}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {3}Methods}{4}{}\protected@file@percent }
-\newlabel{sec:methods}{{3}{4}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Dataset and Participants}{4}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Model Architecture}{4}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Data Splits and Evaluation Protocol}{4}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.4}Transfer Learning Strategies}{5}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.5}Data Efficiency Analysis}{5}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.6}Training Methodology}{5}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.7}Evaluation}{5}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {3.7.1}Performance Metrics}{6}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {3.8}Statistical Analysis and Visualization}{6}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {4}Results}{6}{}\protected@file@percent }
-\newlabel{sec:results}{{4}{6}}
-\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces \textbf  {Study design, dataset characteristics, and methodology.} \textbf  {a}, Experimental workflow showing the leave-one-out cross-validation approach for personalization evaluation. Population data from multiple participants is used to train a base model, which is then personalized through fine-tuning on individual target participants' data, followed by evaluation on held-out test data. \textbf  {b}, Dataset characteristics showing the distribution of smoking and non-smoking sessions across all eight participants (P0-P7). Data collection involved accelerometer recordings at 50Hz, with sessions annotated for smoking behavior. \textbf  {c}, Model architecture diagram illustrating the lightweight 1D CNN designed for 60-second accelerometer windows (3000 samples $\times $ 6 features). The network consists of three convolutional layers with increasing filter counts, followed by global average pooling and a binary classifier. \textbf  {d}, Representative accelerometer trace showing characteristic patterns during smoking behavior. The highlighted region demonstrates the distinctive hand-to-mouth gestures captured during smoking events, which the model learns to recognize.}}{7}{}\protected@file@percent }
-\newlabel{fig:study_design}{{1}{7}}
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces \textbf  {Personalization significantly improves smoking detection performance across participants.} \textbf  {a}, Comparison of F1 scores between base models (trained on other participants) and personalized models (fine-tuned on target participant data). Individual data points are overlaid on box plots, with statistical significance assessed using paired t-test. Effect size quantified using Cohen's $d$. \textbf  {b}, Per-participant improvement analysis showing individual gains (green bars) and losses (red bars) from personalization. Values represent absolute F1 score improvements. Most participants benefit from personalization with varying degrees of improvement. \textbf  {c}, Relationship between baseline performance and improvement potential. Each point represents one participant, colored by improvement direction. Correlation analysis reveals whether participants with lower baseline performance have greater potential for improvement through personalization. \textbf  {d}, Success rate and effect size summary. Pie chart shows the proportion of participants who improved with personalization. Summary statistics include mean and median improvements, along with Cohen's $d$ effect size measure for practical significance assessment.}}{8}{}\protected@file@percent }
-\newlabel{fig:main_results}{{2}{8}}
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces \textbf  {Training dynamics reveal personalization mechanisms and success patterns.} \textbf  {a}, Loss curves aligned by transition epoch showing target validation loss relative to the onset of personalization. Individual participant curves (gray) and population mean with confidence intervals (blue) demonstrate the learning trajectory during personalization. Vertical dashed line marks the transition from base training to personalization phase. \textbf  {b}, Distribution of relative improvement achieved through personalization, calculated as the percentage of remaining performance gap captured: $\frac  {F1_{\text  {personalized}} - F1_{\text  {base}}}{1 - F1_{\text  {base}}} \times 100$. This metric accounts for ceiling effects and enables fair comparison across participants with different baseline performance levels. \textbf  {c}, Convergence analysis examining the relationship between personalization training duration and final improvement. Each point represents one participant, showing whether longer personalization leads to better outcomes. \textbf  {d}, Success pattern analysis categorizing participants by improvement magnitude. Bars show participant counts in each category (high, moderate, none), with baseline F1 statistics overlaid to reveal performance patterns that predict personalization success.}}{9}{}\protected@file@percent }
-\newlabel{fig:training_dynamics}{{3}{9}}
-\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces \textbf  {Transfer learning enables superior performance with limited target data.} Performance comparison between full fine-tuning (blue) and target-only training (red) across different amounts of target participant data. Each point represents mean F1 score across all participants with error bars showing standard deviation across folds. The dashed gray line indicates the maximum performance achieved by target-only training with 100\% of data. Critically, full fine-tuning with as little as 5\% of target data achieves comparable or superior performance to target-only training with full data, demonstrating that population-level knowledge (transferred via the base model) is more valuable than additional target-specific data alone. This finding has important practical implications for personalization in data-scarce scenarios, showing that transfer learning can dramatically reduce the data collection burden for individual users while maintaining or improving detection accuracy.}}{10}{}\protected@file@percent }
-\newlabel{fig:data_efficiency}{{4}{10}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Overall Performance Improvements}{11}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Transfer learning strategy comparison - b128\_aug\_patience50\_full\_fine\_tuning\_pct1.0\_20250929\_144626}}{11}{}\protected@file@percent }
-\newlabel{tab:results}{{1}{11}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Detailed Performance Analysis}{11}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Detailed performance metrics - b128\_aug\_patience50\_full\_fine\_tuning\_pct1.0\_20250929\_144626}}{11}{}\protected@file@percent }
-\newlabel{tab:detailed_results}{{2}{11}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Individual Variability}{11}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Training Dynamics}{11}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Training dynamics analysis - b128\_aug\_patience50\_full\_fine\_tuning\_pct1.0\_20250929\_144626}}{11}{}\protected@file@percent }
-\newlabel{tab:training_dynamics}{{3}{11}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Transfer Learning Data Efficiency}{12}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {5}Discussion}{12}{}\protected@file@percent }
-\newlabel{sec:discussion}{{5}{12}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Implications for Practice}{12}{}\protected@file@percent }
-\bibstyle{plain}
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyperFirstAtBeginDocument{\AtBeginDocument}
+\HyperFirstAtBeginDocument{\ifx\hyper@anchor\@undefined
+\global\let\oldcontentsline\contentsline
+\gdef\contentsline#1#2#3#4{\oldcontentsline{#1}{#2}{#3}}
+\global\let\oldnewlabel\newlabel
+\gdef\newlabel#1#2{\newlabelxx{#1}#2}
+\gdef\newlabelxx#1#2#3#4#5#6{\oldnewlabel{#1}{{#2}{#3}}}
+\AtEndDocument{\ifx\hyper@anchor\@undefined
+\let\contentsline\oldcontentsline
+\let\newlabel\oldnewlabel
+\fi}
+\fi}
+\global\let\hyper@last\relax 
+\gdef\HyperFirstAtBeginDocument#1{#1}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\citation{who2021tobacco}
+\citation{nahum2018just}
+\citation{sazonov2013smoke,saleheen2015puffmarker}
+\citation{tang2020individualized}
+\citation{stone2007patient}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}Results}{2}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Dataset and Experimental Design}{2}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Population Models Exhibit Poor Generalization to Individuals}{2}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Fine-Tuning Achieves Robust Personalization with Full Target Data}{2}{subsection.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.4}Transfer Learning Excels in Low-Data Regimes}{3}{subsection.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.5}Fine-Tuning Outperforms Training From Scratch}{3}{subsection.2.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.6}Ablation: Base Model Size Requirements}{3}{subsection.2.6}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces \textbf  {Performance metrics by participant (100\% target data, N=6 base participants).} All metrics computed on held-out test sets. Fold numbers correspond to leave-one-participant-out cross-validation folds. Negative absolute improvement for folds 4-5 reflects negligible degradation within measurement noise.}}{4}{table.1}\protected@file@percent }
+\newlabel{tab:performance}{{1}{4}{\textbf {Performance metrics by participant (100\% target data, N=6 base participants).} All metrics computed on held-out test sets. Fold numbers correspond to leave-one-participant-out cross-validation folds. Negative absolute improvement for folds 4-5 reflects negligible degradation within measurement noise}{table.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces \textbf  {Transfer learning enables robust personalization across participants.} \textbf  {(A)} Population-trained base models show variable performance across participants (blue, median F1 = 0.87), while fine-tuned models achieve consistent high performance (orange, median F1 = 0.91). Boxplots show distribution across hyperparameter configurations; individual points represent specific experimental runs. \textbf  {(B)} Performance improvement is consistent across all seven participants (folds 0-6). Each fold represents leave-one-participant-out cross-validation where one participant serves as the target individual. \textbf  {(C)} Absolute improvement in F1 score (fine-tuned - base) for each participant. Dashed red line indicates no improvement ($\Delta $F1 = 0). Six of seven participants show gains (range: -0.01 to +0.06); two participants show negligible degradation within measurement noise. \textbf  {(D)} Relative improvement percentage ((fine-tuned - base) / base $\times $ 100\%) demonstrates that personalization provides proportional benefits regardless of base model performance. All results shown for models trained with 100\% target participant data and N=6 base participants.}}{5}{figure.1}\protected@file@percent }
+\newlabel{fig:personalization}{{1}{5}{\textbf {Transfer learning enables robust personalization across participants.} \textbf {(A)} Population-trained base models show variable performance across participants (blue, median F1 = 0.87), while fine-tuned models achieve consistent high performance (orange, median F1 = 0.91). Boxplots show distribution across hyperparameter configurations; individual points represent specific experimental runs. \textbf {(B)} Performance improvement is consistent across all seven participants (folds 0-6). Each fold represents leave-one-participant-out cross-validation where one participant serves as the target individual. \textbf {(C)} Absolute improvement in F1 score (fine-tuned - base) for each participant. Dashed red line indicates no improvement ($\Delta $F1 = 0). Six of seven participants show gains (range: -0.01 to +0.06); two participants show negligible degradation within measurement noise. \textbf {(D)} Relative improvement percentage ((fine-tuned - base) / base $\times $ 100\%) demonstrates that personalization provides proportional benefits regardless of base model performance. All results shown for models trained with 100\% target participant data and N=6 base participants}{figure.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces \textbf  {Data-efficient personalization requires minimal individual data.} \textbf  {(A)} Fine-tuning with target-only updates achieves high performance with as little as 5-12.5\% of target participant data. Boxplots show performance distribution across seven participants at each data percentage level (1\%, 5\%, 12.5\%, 25\%, 50\%, 100\%). \textbf  {(B)} Direct comparison of full fine-tuning (orange, continued training on base + target data) versus target-only fine-tuning (blue, training only on target data in second phase). Both approaches show similar data efficiency, with plateau effects beginning at 12.5\% target data. \textbf  {(C)} Comparison across training paradigms: full fine-tuning, target-only (trained from scratch using only target data), and target-only fine-tuning. Target-only training shows substantially lower performance at 1-5\% data, demonstrating the value of population-pretrained initialization. \textbf  {(D)} Individual participant trajectories across data percentages. Each fold maintains consistent performance trends, with diminishing returns beyond 25-50\% target data. Results demonstrate that collecting 5-12.5\% of a full individual dataset achieves near-optimal personalization.}}{6}{figure.2}\protected@file@percent }
+\newlabel{fig:data_efficiency}{{2}{6}{\textbf {Data-efficient personalization requires minimal individual data.} \textbf {(A)} Fine-tuning with target-only updates achieves high performance with as little as 5-12.5\% of target participant data. Boxplots show performance distribution across seven participants at each data percentage level (1\%, 5\%, 12.5\%, 25\%, 50\%, 100\%). \textbf {(B)} Direct comparison of full fine-tuning (orange, continued training on base + target data) versus target-only fine-tuning (blue, training only on target data in second phase). Both approaches show similar data efficiency, with plateau effects beginning at 12.5\% target data. \textbf {(C)} Comparison across training paradigms: full fine-tuning, target-only (trained from scratch using only target data), and target-only fine-tuning. Target-only training shows substantially lower performance at 1-5\% data, demonstrating the value of population-pretrained initialization. \textbf {(D)} Individual participant trajectories across data percentages. Each fold maintains consistent performance trends, with diminishing returns beyond 25-50\% target data. Results demonstrate that collecting 5-12.5\% of a full individual dataset achieves near-optimal personalization}{figure.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces \textbf  {Moderate-sized population datasets suffice for effective transfer learning.} \textbf  {(A)} Fine-tuned model performance improves with number of base participants used for population pretraining, showing diminishing returns beyond 3-4 participants. Boxplots aggregate across seven target participants (folds), each evaluated with N=1-6 base participants. \textbf  {(B)} Base model size effect holds across different target data percentages. Performance improvements from additional base participants are most pronounced at lower target data levels (1-12.5\%), suggesting population diversity becomes less critical when abundant individual data is available. \textbf  {(C)} Individual participant responses to base model size variation. Fold 3 shows high sensitivity to base participant count, while folds 4-6 maintain robust performance even with limited base data. This heterogeneity reflects individual differences in how well participants match population-level feature representations. \textbf  {(D)} Full fine-tuning and target-only fine-tuning show similar sensitivity to base model size. Both training paradigms benefit from larger population datasets, with performance stabilizing at N=4-6 base participants. Results indicate that effective personalized models can be deployed with relatively small initial population cohorts, reducing upfront data collection costs.}}{7}{figure.3}\protected@file@percent }
+\newlabel{fig:base_ablation}{{3}{7}{\textbf {Moderate-sized population datasets suffice for effective transfer learning.} \textbf {(A)} Fine-tuned model performance improves with number of base participants used for population pretraining, showing diminishing returns beyond 3-4 participants. Boxplots aggregate across seven target participants (folds), each evaluated with N=1-6 base participants. \textbf {(B)} Base model size effect holds across different target data percentages. Performance improvements from additional base participants are most pronounced at lower target data levels (1-12.5\%), suggesting population diversity becomes less critical when abundant individual data is available. \textbf {(C)} Individual participant responses to base model size variation. Fold 3 shows high sensitivity to base participant count, while folds 4-6 maintain robust performance even with limited base data. This heterogeneity reflects individual differences in how well participants match population-level feature representations. \textbf {(D)} Full fine-tuning and target-only fine-tuning show similar sensitivity to base model size. Both training paradigms benefit from larger population datasets, with performance stabilizing at N=4-6 base participants. Results indicate that effective personalized models can be deployed with relatively small initial population cohorts, reducing upfront data collection costs}{figure.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces \textbf  {Learned representations cluster by participant identity.} t-SNE visualization of learned feature representations from the fine-tuned model's penultimate layer. Each point represents a single 60-second window; colors indicate participant identity (folds 0-6). Clear participant-specific clustering demonstrates that fine-tuning adapts internal representations to capture individual behavioral patterns. Distinct clusters for each participant (particularly visible for participants 2, 3, and 6) suggest the model learns participant-specific smoking gesture signatures, explaining improved personalized performance. Overlapping regions in the center indicate shared features across participants (e.g., universal hand-to-mouth motion patterns), while peripheral clusters capture individual-specific nuances (e.g., hand dominance, device placement, smoking style). This representation structure illustrates how transfer learning balances population-level generalization with individual-specific adaptation.}}{8}{figure.4}\protected@file@percent }
+\newlabel{fig:tsne}{{4}{8}{\textbf {Learned representations cluster by participant identity.} t-SNE visualization of learned feature representations from the fine-tuned model's penultimate layer. Each point represents a single 60-second window; colors indicate participant identity (folds 0-6). Clear participant-specific clustering demonstrates that fine-tuning adapts internal representations to capture individual behavioral patterns. Distinct clusters for each participant (particularly visible for participants 2, 3, and 6) suggest the model learns participant-specific smoking gesture signatures, explaining improved personalized performance. Overlapping regions in the center indicate shared features across participants (e.g., universal hand-to-mouth motion patterns), while peripheral clusters capture individual-specific nuances (e.g., hand dominance, device placement, smoking style). This representation structure illustrates how transfer learning balances population-level generalization with individual-specific adaptation}{figure.4}{}}
+\citation{yosinski2014transfer,devlin2019bert}
+\citation{saleheen2015puffmarker}
+\citation{parate2014detecting}
+\citation{mathur2021designing}
+\citation{settles2009active}
+\citation{finn2017model}
+\@writefile{toc}{\contentsline {section}{\numberline {3}Discussion}{9}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4}Methods}{10}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Participants and Data Collection}{10}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Data Preprocessing and Windowing}{10}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Model Architecture}{10}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Training Procedures}{11}{subsection.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Experimental Design and Hyperparameters}{11}{subsection.4.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.6}Evaluation Metrics}{11}{subsection.4.6}\protected@file@percent }
+\bibstyle{unsrt}
 \bibdata{references}
-\bibcite{abotabik2020smart}{1}
-\bibcite{patient_monitoring_2020}{2}
-\bibcite{chato2023survey}{3}
-\bibcite{wpt_health_2024}{4}
-\bibcite{smartband2024feasibility}{5}
-\bibcite{esteva2021deep}{6}
-\bibcite{fu2021personalized}{7}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Limitations}{13}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {6}Conclusion}{13}{}\protected@file@percent }
-\newlabel{sec:conclusion}{{6}{13}}
-\bibcite{goodfellow2016deep}{8}
-\bibcite{ml2023prediction}{9}
-\bibcite{howard2018universal}{10}
-\bibcite{hsieh2023distilling}{11}
-\bibcite{smoking_realtime_2022}{12}
-\bibcite{biomedical_tsc_2022}{13}
-\bibcite{student_activity_2024}{14}
-\bibcite{ehealth2024systematic}{15}
-\bibcite{kiranyaz2021d}{16}
-\bibcite{dilated_multivariate_2019}{17}
-\bibcite{lecun2015deep}{18}
-\bibcite{leppin2025perspectives}{19}
-\bibcite{gait_analysis_2024}{20}
-\bibcite{liu2024cattle}{21}
-\bibcite{1d_cnn_har_2021}{22}
-\bibcite{cnn_lstm_2023}{23}
-\bibcite{behavioral2024activation}{24}
-\bibcite{oord2016wavenet}{25}
-\bibcite{ordonez2016deep}{26}
-\bibcite{pan2010survey}{27}
-\bibcite{rajpurkar2022ai}{28}
-\bibcite{roy2024fewshot}{29}
-\bibcite{senyurek2020cnn}{30}
-\bibcite{shah2023emergence}{31}
-\bibcite{dilated_attention_2021}{32}
-\bibcite{singh2024hybrid}{33}
-\bibcite{topol2019high}{34}
-\bibcite{wang2019deep_HAR}{35}
-\bibcite{wang2022deep}{36}
-\bibcite{weiss2016survey}{37}
-\bibcite{jmir2024sensors}{38}
-\bibcite{yang2022jitai}{39}
-\bibcite{zhang2022deep_har}{40}
-\bibcite{mobile2023interventions}{41}
-\@writefile{toc}{\contentsline {section}{\numberline {A}Model Architecture Details}{16}{}\protected@file@percent }
-\newlabel{appendix:architecture}{{A}{16}}
-\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces SimpleSmokingCNN Architecture Specification}}{16}{}\protected@file@percent }
-\newlabel{tab:architecture}{{4}{16}}
-\gdef \@abspage@last{16}
+\bibcite{who2021tobacco}{{1}{}{{}}{{}}}
+\bibcite{nahum2018just}{{2}{}{{}}{{}}}
+\bibcite{sazonov2013smoke}{{3}{}{{}}{{}}}
+\bibcite{saleheen2015puffmarker}{{4}{}{{}}{{}}}
+\bibcite{tang2020individualized}{{5}{}{{}}{{}}}
+\bibcite{stone2007patient}{{6}{}{{}}{{}}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Data Availability}{12}{section.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}Code Availability}{12}{section.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}Acknowledgements}{12}{section.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8}Author Contributions}{12}{section.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {9}Competing Interests}{12}{section.9}\protected@file@percent }
+\bibcite{yosinski2014transfer}{{7}{}{{}}{{}}}
+\bibcite{devlin2019bert}{{8}{}{{}}{{}}}
+\bibcite{parate2014detecting}{{9}{}{{}}{{}}}
+\bibcite{mathur2021designing}{{10}{}{{}}{{}}}
+\bibcite{settles2009active}{{11}{}{{}}{{}}}
+\bibcite{finn2017model}{{12}{}{{}}{{}}}
+\providecommand\NAT@force@numbers{}\NAT@force@numbers
+\gdef \@abspage@last{13}

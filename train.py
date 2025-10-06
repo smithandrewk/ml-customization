@@ -1,3 +1,4 @@
+# TODO: maybe jsut split across windows because stride is equal to window size.
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset, ConcatDataset
@@ -63,7 +64,7 @@ print(f'Using {model_type} model: {model.__class__.__name__}')
 
 augmenter = None
 if hyperparameters['use_augmentation']:
-    from lib.utils import TimeSeriesAugmenter
+    from lib.train_utils import TimeSeriesAugmenter
     augmenter = TimeSeriesAugmenter({
         'jitter_noise_std': hyperparameters['jitter_std'],
         'magnitude_scale_range': hyperparameters['magnitude_range'],
@@ -127,11 +128,6 @@ if target_data_pct < 1.0:
     print(f'Target train dataset size: {len(target_train_dataset)}')
     target_train_dataset = random_subsample(target_train_dataset, target_data_pct)
     print(f'Target train dataset size: {len(target_train_dataset)}')
-
-print(f'Target val dataset size: {len(target_val_dataset)}')
-target_val_dataset = random_subsample(target_val_dataset, .1)
-print(f'Target val dataset size: {len(target_val_dataset)}')
-
 
 target_trainloader = DataLoader(target_train_dataset, batch_size=batch_size, shuffle=True)
 target_valloader = DataLoader(target_val_dataset, batch_size=batch_size, shuffle=False)

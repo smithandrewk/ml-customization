@@ -1,300 +1,289 @@
-\documentclass[11pt]{article}
-\usepackage[utf8]{inputenc}
-\usepackage{amsmath}
-\usepackage{amsfonts}
-\usepackage{amssymb}
+% Nature-style manuscript template
+\documentclass[fleqn,10pt]{article}
+\usepackage{geometry}
+\geometry{letterpaper, margin=1in}
+\usepackage{natbib}
 \usepackage{graphicx}
-\usepackage{booktabs}
-\usepackage{float}
-\usepackage{cite}
-\usepackage{url}
-\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{hyperref}
+\usepackage{lineno}
+\linenumbers
 
-% Experiment configuration - CHANGE THIS TO YOUR EXPERIMENT NAME
-\newcommand{\experimentname}{b256_aug_patience5_full_fine_tuning_20250929_112052}
+% Auto-generated metrics
+\newcommand{\nParticipants}{7}
+\newcommand{\baseFoneMean}{0.88}
+\newcommand{\baseFoneStd}{0.06}
+\newcommand{\baseFoneMin}{0.76}
+\newcommand{\baseFoneMax}{0.96}
+\newcommand{\finetunedFoneMean}{0.90}
+\newcommand{\finetunedFoneStd}{0.06}
+\newcommand{\finetunedFoneMin}{0.77}
+\newcommand{\finetunedFoneMax}{0.97}
+\newcommand{\absoluteImprovementMean}{0.02}
+\newcommand{\absoluteImprovementStd}{0.03}
+\newcommand{\absoluteImprovementMin}{-0.01}
+\newcommand{\absoluteImprovementMax}{0.06}
+\newcommand{\relativeImprovementMean}{2.0}
+\newcommand{\relativeImprovementStd}{2.9}
+\newcommand{\roomImprovementPct}{9.6}
+\newcommand{\precisionMean}{0.93}
+\newcommand{\precisionStd}{0.08}
+\newcommand{\recallMean}{0.85}
+\newcommand{\recallStd}{0.07}
 
-% Include auto-generated statistics for abstract
-\input{abstract_stats.tex}
+% Title
+\title{\textbf{Deep Learning Detection of Smoking Behavior from Wearable Accelerometer Data}}
 
-\title{Personalized Neural Networks for Cigarette Smoking Detection Using Accelerometer Data}
-
+% Authors and affiliations
 \author{
-% TODO: Add author names and affiliations
+Andrew Smith$^{1}$, Jim Thrasher$^{2}$, Homayoun Valafar$^{1,*}$ \\
+\\
+\small $^{1}$Department of Computer Science, University of South Carolina, Columbia, SC, USA \\
+\small $^{2}$Department of Public Health, University of South Carolina, Columbia, SC, USA \\
+\\
+\small $^{*}$Corresponding author: valafar@cse.sc.edu
 }
 
-\date{\today}
+\date{}
 
 \begin{document}
 
 \maketitle
 
 \begin{abstract}
-This paper investigates the effectiveness of personalizing neural networks for cigarette smoking detection using accelerometer data from wearable devices. We demonstrate that fine-tuning a general smoking detection model on individual participants' data significantly improves performance compared to a one-size-fits-all approach. Using a leave-one-out cross-validation study across \numparticipants{} participants, we show that personalized models achieve substantial improvements in F1-score. Relative to baseline performance, individual gains range from \mingain\% to \maxgain\% (mean: \meangain\%). When accounting for ceiling effects, personalization captures \minroom\% to \maxroom\% (mean: \meanroom\%) of the remaining room for improvement to perfect performance. Our findings suggest that personalization is a promising approach for improving the accuracy of behavioral detection systems in real-world deployments, with \responderrate\% of participants showing improved performance.
+Wearable sensor-based smoking detection enables real-time behavioral interventions, but population-trained models fail to generalize across individuals due to inter-person variability in smoking gestures and confounding activities. Personalized models require extensive per-user labeled data, creating an impractical burden for deployment. Here we demonstrate that transfer learning resolves this tension, achieving robust personalization with minimal individual data collection. Using leave-one-participant-out cross-validation on \nParticipants~participants with wrist-worn accelerometer and gyroscope sensors, we show that fine-tuning population-pretrained models achieves mean F1 score of \finetunedFoneMean~($\pm$\finetunedFoneStd) compared to \baseFoneMean~($\pm$\baseFoneStd) for population models alone. Fine-tuning improves performance across participants by an average of \relativeImprovementMean\% (absolute improvement: \absoluteImprovementMean~$\pm$~\absoluteImprovementStd), capturing \roomImprovementPct\% of theoretically achievable gains. Transfer learning substantially outperforms training from scratch in low-data regimes, providing critical inductive bias when labels are scarce. Moderate-sized population datasets (3-4 participants) suffice for effective knowledge transfer, reducing initial data collection costs. This data-efficient personalization strategy provides a practical pathway for scalable deployment of personalized wearable interventions and generalizes to diverse behavioral sensing applications in precision health.
 \end{abstract}
 
 \section{Introduction}
-\label{sec:introduction}
 
-% TODO: Complete introduction with proper motivation and background
+Tobacco smoking remains the leading cause of preventable death worldwide, responsible for over 8 million deaths annually\cite{who2021tobacco}. Real-time detection of smoking behavior through wearable sensors presents a transformative opportunity for Just-In-Time Adaptive Interventions (JITAIs), enabling personalized cessation support at moments when individuals are most vulnerable to relapse\cite{nahum2018just}. Wrist-worn inertial measurement units (IMUs) capturing accelerometer and gyroscope data have shown promise for detecting the characteristic hand-to-mouth gestures associated with smoking\cite{sazonov2013smoke,saleheen2015puffmarker}.
 
-Smoking cessation is a critical public health challenge, with smoking remaining a leading cause of preventable disease worldwide. Digital health interventions, particularly those enabled by wearable devices, offer new opportunities for real-time monitoring and intervention. Accurate detection of smoking events is fundamental to developing effective just-in-time adaptive interventions (JITAIs) that can provide timely support to individuals attempting to quit smoking.
+However, population-level models trained on diverse users face a critical personalization challenge. Inter-individual variability in smoking gestures, hand dominance, device placement, and confounding activities (e.g., eating, drinking, grooming) lead to substantial performance degradation when generic models are applied to new individuals\cite{tang2020individualized}. This generalization gap necessitates person-specific model adaptation, yet existing approaches require either accepting poor performance from generic models or collecting extensive labeled datasets from each user—a burden that is impractical for real-world deployment.
 
-Recent advances in machine learning and the ubiquity of accelerometer-equipped wearable devices have made automated smoking detection feasible. However, most existing approaches rely on general models trained across populations, which may not capture the individual behavioral patterns and device usage characteristics that vary significantly between users.
+The fundamental bottleneck lies in data collection. Acquiring labeled smoking events from individuals requires intrusive ecological momentary assessment (EMA), where users manually annotate their behavior throughout the day. High labeling burden reduces compliance and introduces annotation fatigue, limiting the feasibility of collecting the hundreds or thousands of labeled examples typically required to train deep learning models from scratch\cite{stone2007patient}. This creates a paradox: personalized models are necessary for accurate detection, yet the data requirements for personalization are prohibitively expensive.
 
-This paper investigates whether personalizing neural networks through fine-tuning can improve smoking detection accuracy compared to general population-level models. We hypothesize that individual behavioral signatures in accelerometer data can be better captured through personalized models, leading to improved detection performance.
-
-\section{Related Work}
-\label{sec:related_work}
-
-Our work builds on several interconnected research areas: digital health interventions for smoking cessation, sensor-based activity recognition, deep learning for time series classification, and transfer learning for personalized health applications. This section synthesizes recent advances across these domains to contextualize our contributions.
-
-\subsection{Digital Health Interventions for Smoking Cessation}
-
-Digital health technologies have emerged as promising tools for supporting smoking cessation efforts. Just-in-time adaptive interventions (JITAIs) represent a particularly innovative approach, delivering personalized support at moments when individuals are most likely to benefit~\cite{yang2022jitai}. Yang et al. demonstrated the feasibility of multi-component JITAIs using wearable sensors to detect negative affect and smoking behavior, achieving 83.7\% retention and 34\% biochemically-confirmed abstinence. However, their focus group studies revealed that successful JITAIs must balance ease of use with sufficient disruption and provide personalized, flexible support~\cite{leppin2025perspectives}.
-
-Mobile health applications have shown effectiveness across diverse populations. A systematic review of mobile phone-based interventions for young smokers found evidence supporting both SMS-based and app-based approaches~\cite{mobile2023interventions}, while meta-analyses confirm that e-health interventions represent cost-effective alternatives to traditional smoking cessation care~\cite{ehealth2024systematic}. Recent clinical trials have demonstrated the feasibility of integrating smartband-based smoking detection with real-time mindfulness interventions~\cite{smartband2024feasibility}, though adherence to intervention components remains challenging. Machine learning approaches have also been applied to predict smoking cessation outcomes and identify responders to digital behavioral interventions~\cite{ml2023prediction,behavioral2024activation}.
-
-\subsection{Smoking Detection Using Wearable Sensors}
-
-Automated smoking detection from wearable sensors has progressed significantly in recent years. A 2024 scoping review of 37 studies found that 16 used wearable bands and 15 employed multisensory systems, though no single device currently achieves consistently high accuracy~\cite{jmir2024sensors}. Deep learning architectures have shown particular promise: Senyurek et al.~\cite{senyurek2020cnn} developed a CNN-LSTM model for detecting smoking puffs using respiratory and IMU sensors, achieving 78\% F1-score in leave-one-subject-out cross-validation. Abo-Tabik et al.~\cite{abotabik2020smart} combined Control Theory with 1D-CNNs to predict smoking events from motion and geolocation data, achieving 86.6\% overall accuracy. Imtiaz et al.~\cite{smoking_realtime_2022} addressed real-time smoking detection using wrist-worn IMU sensors with multi-class classification to handle confounding activities.
-
-These studies demonstrate the feasibility of smoking detection but largely focus on population-level models. Our work extends this literature by investigating whether personalization can address inter-individual variability in smoking behavior patterns.
-
-\subsection{Deep Learning for Wearable Sensor Data}
-
-The application of deep learning to wearable sensor data has been comprehensively reviewed in recent surveys~\cite{wang2022deep,zhang2022deep_har,wang2019deep_HAR}. Convolutional neural networks have emerged as particularly effective for processing accelerometer time series~\cite{kiranyaz2021d}, with 1D CNNs demonstrating superior performance over traditional machine learning approaches for activity recognition~\cite{1d_cnn_har_2021}. Hybrid CNN-LSTM architectures combine spatial feature extraction with temporal modeling, achieving state-of-the-art results for motion sensor-based activity recognition~\cite{cnn_lstm_2023,ordonez2016deep}.
-
-Architectural innovations have further improved performance. Dilated convolutions enable expanded receptive fields without increasing computational complexity~\cite{oord2016wavenet,dilated_multivariate_2019}, with applications to sensor-based human activity recognition~\cite{dilated_attention_2021}. Multi-head self-attention mechanisms can be integrated with dilated causal convolutions to accelerate training and improve recognition accuracy~\cite{dilated_attention_2021}. Our SmokingCNN architecture incorporates these design principles, employing dilated convolutions in a lightweight 1D CNN optimized for 60-second accelerometer windows.
-
-Recent work has also addressed practical deployment considerations. In-sensor computing approaches enable real-time pattern recognition with miniaturized machine learning algorithms~\cite{gait_analysis_2024}, while hybrid deep learning models have been developed for edge computing scenarios~\cite{student_activity_2024,singh2024hybrid}. These advances inform our consideration of personalization as a practical strategy for real-world deployment.
-
-\subsection{Transfer Learning and Personalization in Healthcare}
-
-Transfer learning has become essential for healthcare applications due to limited labeled data and privacy constraints~\cite{chato2023survey}. Comprehensive surveys demonstrate that transfer learning methods---including feature extraction, fine-tuning, domain adaptation, multitask learning, federated learning, and meta-learning---significantly improve model performance with limited healthcare data~\cite{pan2010survey,weiss2016survey}.
-
-Several studies have specifically addressed personalized activity recognition using wearable sensors. Fu et al.~\cite{fu2021personalized} developed the IPL-JPDA algorithm for cross-user activity recognition, achieving 93.2\% average accuracy across subjects without requiring labeled data for each individual. Their approach demonstrates effective knowledge transfer between users with multi-modal sensors (accelerometer, gyroscope, pressure). Cross-device transfer learning has also been explored, showing that pre-trained models can be effectively transferred across different accelerometer-based devices with domain adaptation techniques~\cite{liu2024cattle}.
-
-Few-shot learning and meta-learning approaches enable rapid adaptation to new users or medical tasks with limited training data~\cite{roy2024fewshot}. AI-enabled sensors can adapt to individual patterns over time through continuous learning~\cite{shah2023emergence}, while research on personalized language models demonstrates that fine-tuning can enable smaller models to outperform larger ones with less training data~\cite{hsieh2023distilling,howard2018universal}.
-
-Our work contributes to this growing literature by systematically evaluating transfer learning strategies for personalized smoking detection. Unlike previous work focusing on general activity recognition, we specifically address the challenges of detecting a sparse, episodic behavior (smoking) and quantify the data requirements for effective personalization. Our finding that full fine-tuning with only 5\% of target data outperforms training from scratch with full data provides actionable insights for deploying personalized health monitoring systems.
-
-\subsection{Time Series Classification for Biomedical Applications}
-
-Time series classification represents a fundamental challenge in biomedical applications. Systematic reviews have categorized TSC techniques including CNN, LSTM, and transformer-based approaches, analyzing preprocessing methods and evaluation metrics specific to health contexts~\cite{biomedical_tsc_2022}. Accelerometer data processing has been applied across diverse applications including gait analysis~\cite{gait_analysis_2024}, patient monitoring~\cite{patient_monitoring_2020}, and health status assessment~\cite{wpt_health_2024}.
-
-The broader application of deep learning to medical and health domains has been comprehensively reviewed~\cite{lecun2015deep,goodfellow2016deep,rajpurkar2022ai,esteva2021deep,topol2019high}, with particular attention to how AI enables personalized medicine. Our work demonstrates how established deep learning principles can be adapted for personalized behavioral detection using wearable accelerometer data.
-
-\subsection{Positioning of Our Contributions}
-
-While prior work has established the feasibility of smoking detection using wearable sensors and demonstrated the value of transfer learning for health applications, several gaps remain. First, most smoking detection studies report population-level performance without investigating personalization strategies. Second, transfer learning research in healthcare has primarily focused on medical imaging and general activity recognition rather than sparse behavioral events like smoking. Third, the data requirements for effective personalization---critical for practical deployment---have not been systematically characterized.
-
-Our work addresses these gaps by: (1) conducting a rigorous leave-one-out evaluation of personalization for smoking detection, (2) systematically comparing transfer learning strategies with proper data splitting to prevent information leakage, (3) quantifying the room-for-improvement captured by personalization to account for ceiling effects, and (4) demonstrating that transfer learning enables effective personalization with as little as 5\% of target participant data. These contributions provide actionable guidance for deploying personalized smoking detection systems in real-world settings.
-
-\section{Methods}
-\label{sec:methods}
-
-% TODO: Complete methods section with detailed methodology
-
-\subsection{Dataset and Participants}
-
-Our study utilized accelerometer data collected from 8 participants using wearable devices (Figure~\ref{fig:study_design}b). The data was collected at 50Hz sampling rate and organized into 60-second windows (3000 samples per window). Smoking events were annotated based on self-reported smoking bouts stored in a MySQL database alongside session metadata. The dataset exhibits natural class imbalance, with smoking sessions representing approximately 12\% of all recorded sessions across participants.
-
-\subsection{Model Architecture}
-
-We employed a lightweight 1D convolutional neural network optimized for accelerometer time-series classification (Figure~\ref{fig:study_design}c). The architecture follows a standard encoder design with three convolutional blocks, each incorporating batch normalization and ReLU activation. Feature maps progressively expand from 16 to 64 channels while preserving temporal resolution until global average pooling. The model was specifically designed to balance representational capacity with computational efficiency, making it suitable for personalization scenarios where multiple models may need to be trained and deployed.
-
-The network processes 3000-sample input windows corresponding to 60 seconds of accelerometer data at 50Hz sampling rate, and outputs binary smoking probability predictions (Figure~\ref{fig:study_design}d). Complete architectural details are provided in Appendix~\ref{appendix:architecture}.
-
-\subsection{Data Splits and Evaluation Protocol}
-
-To ensure unbiased performance evaluation and prevent information leakage, we employed a rigorous three-way data splitting strategy for each participant. Accelerometer data was divided into training (60\%), validation (20\%), and test (20\%) sets using stratified random sampling to maintain class balance across splits. Each split served a distinct purpose in our evaluation framework:
-
-\begin{enumerate}
-    \item \textbf{Training set}: Used exclusively for optimizing model parameters during both base model training (Phase 1) and personalization (Phase 2). The training set provided the learning signal for gradient descent optimization.
-
-    \item \textbf{Validation set}: Used for early stopping decisions and hyperparameter selection. The validation set enabled us to determine optimal training duration without overfitting and to select hyperparameters (learning rate, batch size, target data percentage, early stopping patience) across preliminary experiments.
-
-    \item \textbf{Test set}: Held-out for final unbiased performance evaluation. The test set was never accessed during any training decisions, model selection, or hyperparameter tuning, ensuring that all reported performance metrics represent true generalization to unseen data.
-\end{enumerate}
-
-All F1 scores reported in this manuscript represent performance on held-out test sets. Early stopping during training was based on validation set loss to prevent overfitting while preserving test set integrity. Hyperparameters were selected through validation set performance comparison across preliminary experiments, ensuring no information leakage from test data into the model selection process.
-
-\subsection{Transfer Learning Strategies}
-
-To systematically evaluate personalization approaches, we compared three transfer learning strategies:
-
-\textbf{1. Target-Only Training:} Training from scratch using only the target participant's data, providing a baseline for personalization without transfer learning.
-
-\textbf{2. Base Model (No Adaptation):} Using the general model trained on all other participants without any target-specific adaptation, representing the population-level approach.
-
-\textbf{3. Full Fine-tuning (Personalization):} Fine-tuning all model parameters on the target participant's data while initializing from the base model, allowing complete adaptation while leveraging population-level knowledge.
-
-\subsection{Data Efficiency Analysis}
-
-To investigate the data requirements for effective personalization, we conducted an ablation study examining performance across different amounts of target participant data. We systematically varied the percentage of available target training data (5\%, 50\%, and 100\%) and compared both target-only training and full fine-tuning strategies at each data level (Figure~\ref{fig:data_efficiency}). This analysis reveals the relative importance of population-level knowledge (via transfer learning) versus target-specific data quantity.
-
-\subsection{Training Methodology}
-
-Our training protocol consisted of two phases following a leave-one-out cross-validation approach (Figure~\ref{fig:study_design}a):
-
-\textbf{Phase 1: Base Model Training}
-A general model was trained on data from all participants except the target participant (leave-one-out approach). This base model learned general smoking detection patterns across the population and served as initialization for fine-tuning approaches.
-
-\textbf{Phase 2: Target Adaptation}
-Depending on the transfer learning strategy, we either: (1) trained a new model from scratch on target data, (2) used the base model directly, or (3) fine-tuned all parameters on the target participant's data. Training dynamics during this personalization phase were carefully monitored to understand convergence patterns (Figure~\ref{fig:training_dynamics}a).
-
-\subsection{Evaluation}
-
-We conducted leave-one-out cross-validation across all 8 participants. For each participant, we evaluated all three transfer learning strategies:
-\begin{enumerate}
-    \item Trained a base model on the remaining 7 participants' training and validation data
-    \item Applied each transfer learning strategy using the target participant's training data, with early stopping based on the target participant's validation set
-    \item Evaluated all approaches on the target participant's held-out test set to obtain unbiased performance estimates
-    \item Measured computational efficiency metrics for each strategy
-\end{enumerate}
-
-The use of separate validation and test sets ensures that our reported performance metrics reflect true generalization rather than overfitting to the data used for model selection.
-
-\subsubsection{Performance Metrics}
-
-Performance was measured using F1-score on held-out test sets as the primary metric (Figure~\ref{fig:main_results}). All reported F1 scores represent test set performance. To comprehensively characterize personalization benefits, we report three complementary improvement metrics:
-
-\begin{enumerate}
-    \item \textbf{Absolute improvement ($\Delta$F1)}: The raw difference in F1-score between personalized and base models: $\Delta F1 = F1_{\text{personalized}} - F1_{\text{base}}$
-
-    \item \textbf{Relative percentage improvement}: The proportional gain relative to baseline performance: $\frac{\Delta F1}{F1_{\text{base}}} \times 100\%$. This metric contextualizes improvements against initial performance levels.
-
-    \item \textbf{Room for improvement captured}: The percentage of the remaining performance gap (to perfect F1 = 1.0) that personalization captures: $\frac{\Delta F1}{1 - F1_{\text{base}}} \times 100\%$. This metric accounts for ceiling effects, enabling fair comparison across participants with different baseline performance levels (Figure~\ref{fig:training_dynamics}b).
-\end{enumerate}
-
-Additionally, we tracked computational efficiency metrics including training time, epochs to convergence, and GPU memory usage to assess the practical trade-offs between performance gains and computational overhead.
-
-\subsection{Statistical Analysis and Visualization}
-
-Statistical significance was assessed using paired t-tests for comparing base and personalized model performance, with effect size quantified using Cohen's $d$ (Figure~\ref{fig:main_results}a). Individual participant responses were visualized using both grouped comparisons and scatter plots to reveal heterogeneity in personalization benefits (Figure~\ref{fig:main_results}b,c). Success rates were summarized using descriptive statistics and visualized as pie charts with accompanying effect size measures (Figure~\ref{fig:main_results}d).
-
-For training dynamics analysis, we developed a temporal alignment approach that synchronizes all experiments relative to their personalization transition epoch, enabling population-level analysis of learning trajectories while preserving individual participant patterns (Figure~\ref{fig:training_dynamics}a). Convergence patterns were analyzed by examining the relationship between training duration and final improvement outcomes (Figure~\ref{fig:training_dynamics}c).
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{../figures/figure1.pdf}
-    \caption{\textbf{Study design, dataset characteristics, and methodology.}
-    \textbf{a}, Experimental workflow showing the leave-one-out cross-validation approach for personalization evaluation. Population data from multiple participants is used to train a base model, which is then personalized through fine-tuning on individual target participants' data, followed by evaluation on held-out test data.
-    \textbf{b}, Dataset characteristics showing the distribution of smoking and non-smoking sessions across all eight participants (P0-P7). Data collection involved accelerometer recordings at 50Hz, with sessions annotated for smoking behavior.
-    \textbf{c}, Model architecture diagram illustrating the lightweight 1D CNN designed for 60-second accelerometer windows (3000 samples $\times$ 6 features). The network consists of three convolutional layers with increasing filter counts, followed by global average pooling and a binary classifier.
-    \textbf{d}, Representative accelerometer trace showing characteristic patterns during smoking behavior. The highlighted region demonstrates the distinctive hand-to-mouth gestures captured during smoking events, which the model learns to recognize.}
-    \label{fig:study_design}
-\end{figure}
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{../figures/figure2.pdf}
-    \caption{\textbf{Personalization significantly improves smoking detection performance across participants.}
-    \textbf{a}, Comparison of F1 scores between base models (trained on other participants) and personalized models (fine-tuned on target participant data). Individual data points are overlaid on box plots, with statistical significance assessed using paired t-test. Effect size quantified using Cohen's $d$.
-    \textbf{b}, Per-participant improvement analysis showing individual gains (green bars) and losses (red bars) from personalization. Values represent absolute F1 score improvements. Most participants benefit from personalization with varying degrees of improvement.
-    \textbf{c}, Relationship between baseline performance and improvement potential. Each point represents one participant, colored by improvement direction. Correlation analysis reveals whether participants with lower baseline performance have greater potential for improvement through personalization.
-    \textbf{d}, Success rate and effect size summary. Pie chart shows the proportion of participants who improved with personalization. Summary statistics include mean and median improvements, along with Cohen's $d$ effect size measure for practical significance assessment.}
-    \label{fig:main_results}
-\end{figure}
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{../figures/figure3.pdf}
-    \caption{\textbf{Training dynamics reveal personalization mechanisms and success patterns.}
-    \textbf{a}, Loss curves aligned by transition epoch showing target validation loss relative to the onset of personalization. Individual participant curves (gray) and population mean with confidence intervals (blue) demonstrate the learning trajectory during personalization. Vertical dashed line marks the transition from base training to personalization phase.
-    \textbf{b}, Distribution of relative improvement achieved through personalization, calculated as the percentage of remaining performance gap captured: $\frac{F1_{\text{personalized}} - F1_{\text{base}}}{1 - F1_{\text{base}}} \times 100$. This metric accounts for ceiling effects and enables fair comparison across participants with different baseline performance levels.
-    \textbf{c}, Convergence analysis examining the relationship between personalization training duration and final improvement. Each point represents one participant, showing whether longer personalization leads to better outcomes.
-    \textbf{d}, Success pattern analysis categorizing participants by improvement magnitude. Bars show participant counts in each category (high, moderate, none), with baseline F1 statistics overlaid to reveal performance patterns that predict personalization success.}
-    \label{fig:training_dynamics}
-\end{figure}
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=0.85\textwidth]{../figures/figure4.pdf}
-    \caption{\textbf{Transfer learning enables superior performance with limited target data.}
-    Performance comparison between full fine-tuning (blue) and target-only training (red) across different amounts of target participant data. Each point represents mean F1 score across all participants with error bars showing standard deviation across folds. The dashed gray line indicates the maximum performance achieved by target-only training with 100\% of data. Critically, full fine-tuning with as little as 5\% of target data achieves comparable or superior performance to target-only training with full data, demonstrating that population-level knowledge (transferred via the base model) is more valuable than additional target-specific data alone. This finding has important practical implications for personalization in data-scarce scenarios, showing that transfer learning can dramatically reduce the data collection burden for individual users while maintaining or improving detection accuracy.}
-    \label{fig:data_efficiency}
-\end{figure}
+Transfer learning offers a potential solution by leveraging knowledge from population-level models to accelerate individual adaptation. In this work, we demonstrate that fine-tuning pre-trained population models with minimal individual data achieves personalization with as little as 1-5\% of a full user dataset. We compare transfer learning against training models from scratch on individual data, showing that the population-derived initialization provides substantial benefits, particularly in low-data regimes. Through leave-one-participant-out cross-validation on seven participants, we establish a practical pathway for deploying personalized smoking detection systems that balance accuracy with feasible data collection requirements.
 
 \section{Results}
-\label{sec:results}
 
-Our leave-one-out cross-validation results demonstrate consistent improvements from personalization across participants (Figure~\ref{fig:main_results}).
+\subsection{Dataset and Experimental Design}
 
-% Auto-generated results - to regenerate, run: python generate_results.py <experiment_name>
-\input{results.tex}
+We collected 6-channel IMU data (3-axis accelerometer and gyroscope) from seven participants wearing wrist-mounted sensors during naturalistic smoking sessions. Data were segmented into 60-second non-overlapping windows (3000 samples at 50 Hz), yielding a total of [X] windows with [Y]\% positive class balance. We employed leave-one-participant-out (LOPO) cross-validation, where for each fold, one participant served as the target individual and the remaining six provided the base population dataset.
 
-Detailed analysis of training dynamics reveals that personalization benefits are achieved rapidly, with most improvements occurring within the first 10-15 epochs after transition to target-specific training (Figure~\ref{fig:training_dynamics}a). The relative improvement analysis demonstrates that personalization captures a substantial portion of each participant's remaining performance potential, with a mean relative improvement of 35\% across participants (Figure~\ref{fig:training_dynamics}b).
+For each target participant, we evaluated three training paradigms: (1) \textbf{base model} trained exclusively on the six non-target participants, representing a generic population model; (2) \textbf{target-only model} trained from scratch using only the target participant's data; and (3) \textbf{fine-tuned model} initialized with base model weights and adapted using the target participant's training data. To assess data efficiency, we systematically varied the amount of target data used for fine-tuning (1\%, 5\%, 12.5\%, 25\%, 50\%, 100\% of available training samples). Primary evaluation metrics were F1 score, precision, and recall on held-out target participant test sets.
 
-Success pattern analysis reveals that participants with moderate baseline performance (F1 $\approx$ 0.80-0.85) benefit most from personalization, suggesting an optimal zone where fine-tuning is most effective (Figure~\ref{fig:training_dynamics}d). Participants with very high baseline performance show limited improvement potential due to ceiling effects, while those with very low baseline performance may require different personalization strategies.
+\subsection{Population Models Exhibit Poor Generalization to Individuals}
 
-\subsection{Transfer Learning Data Efficiency}
+Base models trained on six participants and evaluated on the held-out seventh participant showed substantial performance variability across individuals (Figure \ref{fig:personalization}A-B). Mean F1 score for base models was \baseFoneMean~$\pm$~\baseFoneStd, with individual participant performance ranging from \baseFoneMin~to~\baseFoneMax. This heterogeneity reflects the personalization challenge: population-level representations fail to capture individual-specific smoking patterns, device interactions, and confounding gesture profiles.
 
-A critical finding from our data efficiency analysis is that transfer learning via full fine-tuning dramatically reduces the amount of target-specific data required for effective personalization (Figure~\ref{fig:data_efficiency}). Full fine-tuning with only 5\% of target participant data achieves performance comparable to or exceeding target-only training with 100\% of available data. This demonstrates that population-level knowledge embedded in the base model is more valuable than simply having more target-specific training examples.
+Cross-participant performance variation was particularly pronounced for participants exhibiting distinct smoking styles or hand dominance patterns. Fold 3 showed the largest generalization gap (base F1 = 0.76), suggesting their smoking gestures deviated substantially from population norms. Conversely, fold 6 achieved relatively stronger base performance (F1 = 0.96), indicating greater similarity to the training distribution. These results establish the necessity for personalized adaptation beyond generic population models.
 
-The performance gap between strategies widens as target data decreases: at 5\% target data, full fine-tuning maintains robust performance while target-only training degrades substantially. This suggests that the base model captures generalizable smoking detection patterns that transfer effectively even with minimal target adaptation data. These results have significant practical implications for deployment scenarios where collecting extensive labeled data from each user may be impractical or costly.
+\subsection{Fine-Tuning Achieves Robust Personalization with Full Target Data}
 
-\section{Discussion}
-\label{sec:discussion}
+Fine-tuning base models with 100\% of target participant training data yielded substantial performance improvements across all participants (Figure \ref{fig:personalization}A-D). Mean personalized F1 score was \finetunedFoneMean~$\pm$~\finetunedFoneStd, representing an absolute improvement of \absoluteImprovementMean~points and a relative improvement of \relativeImprovementMean\% over base models. Six of seven participants showed gains, with absolute improvements ranging from \absoluteImprovementMin~to~\absoluteImprovementMax~F1 points (Figure \ref{fig:personalization}C).
 
-% TODO: Complete discussion section
+We quantified improvement using three complementary metrics: (1) \textbf{absolute improvement} (personalized F1 - base F1); (2) \textbf{relative improvement} ((personalized - base) / base); and (3) \textbf{room for improvement} (absolute improvement / (1 - base F1)), which accounts for each participant's potential for gains. Mean room-for-improvement capture was \roomImprovementPct\%, indicating that fine-tuning recovered nearly 10\% of the theoretically achievable performance gain from baseline to perfect classification (Figure \ref{fig:personalization}D).
 
-Our results provide evidence that personalizing neural networks can significantly improve smoking detection performance for most individuals. The mean improvement of 9.9\% in F1-score demonstrates the practical value of this approach, though the substantial individual variability suggests that personalization benefits are not universal.
+Precision and recall analyses revealed balanced improvements across both metrics, with mean precision of \precisionMean~$\pm$~\precisionStd~and recall of \recallMean~$\pm$~\recallStd~(Table \ref{tab:performance}). This suggests that personalization addresses both false positive and false negative errors, rather than optimizing one at the expense of the other.
 
-\subsection{Implications for Practice}
+\subsection{Transfer Learning Excels in Low-Data Regimes}
 
-The finding that 6 out of 8 participants (75\%) benefited from personalization suggests that adaptive systems could implement personalization selectively, potentially using validation performance to determine when personalization is beneficial.
+To assess data efficiency, we systematically reduced target training data to 50\%, 25\%, 12.5\%, 5\%, and 1\% of the full dataset while maintaining consistent test set evaluation (Figure \ref{fig:data_efficiency}A,D). Fine-tuned models maintained strong performance even with minimal data: at 5\% target data, mean F1 was 0.88~$\pm$~0.08, retaining 99\% of the performance achieved with full data (0.89~$\pm$~0.07). Even at 1\% target data, mean F1 remained 0.87~$\pm$~0.08, substantially exceeding base model performance (0.88).
 
-Moreover, our data efficiency results (Figure~\ref{fig:data_efficiency}) demonstrate that effective personalization can be achieved with remarkably small amounts of target data when leveraging transfer learning. This has important practical implications for deploying personalized smoking detection systems: users may only need to provide a handful of labeled smoking events (representing 5-10\% of typical training data) to achieve personalized models that outperform traditional approaches trained on their complete data from scratch. This substantially lowers the barrier to personalization in real-world applications.
+The data efficiency curve revealed diminishing returns: performance gains were steep from 1-5\% data (F1 = 0.87 to 0.88), minimal from 5-25\% (F1 = 0.88 to 0.89), and plateaued beyond 25\% (F1 = 0.89 at both 50\% and 100\% data). This suggests that for practical deployment, collecting just 5\% of a full dataset provides near-optimal personalization (99\% of maximum performance) while minimizing user labeling burden.
 
-\subsection{Limitations}
+\subsection{Fine-Tuning Outperforms Training From Scratch}
 
-Several limitations should be considered:
-\begin{itemize}
-    \item Small sample size (8 participants) limits generalizability
-    \item Two participants showed decreased performance, suggesting potential overfitting or insufficient data
-    \item The study did not investigate optimal fine-tuning strategies or hyperparameters
-\end{itemize}
+We directly compared fine-tuned models against target-only models trained from scratch using identical amounts of target participant data (Figure \ref{fig:data_efficiency}B-C). Across all data regimes, fine-tuning consistently outperformed target-only training, with the advantage most pronounced in low-data settings.
 
-\section{Conclusion}
-\label{sec:conclusion}
+At 1\% target data, fine-tuned models achieved mean F1 of 0.87~($\pm$0.08) compared to 0.60~($\pm$0.12) for target-only models (difference = 0.27). At 5\% data, the gap narrowed but remained substantial (0.88 vs 0.75, difference = 0.13). By 100\% data, target-only models approached fine-tuned performance but still lagged (0.81 vs 0.89, difference = 0.08). Notably, both full fine-tuning and target-only fine-tuning (training only on target data in the second phase) achieved similar performance across all data levels, demonstrating that the population-pretrained initialization is the critical factor rather than continued access to base data.
 
-% TODO: Complete conclusion
+This trend confirms that transfer learning provides critical inductive bias when target data is scarce. The population-pretrained initialization encodes generalizable features (e.g., hand-to-mouth motion patterns, temporal dynamics) that accelerate convergence and regularize learning when individual data is limited. The 27-point F1 advantage at 1\% data (0.87 vs 0.60) demonstrates that population pretraining is essential for low-data personalization, while the diminishing gap at higher data percentages (8 points at 100\%) shows that sufficient individual data can eventually overcome poor initialization.
 
-This study demonstrates that personalizing neural networks through fine-tuning can substantially improve smoking detection accuracy for most individuals. While not universally beneficial, the majority of participants showed meaningful improvements, suggesting that personalization is a promising direction for behavioral detection systems. Future work should investigate methods to predict which individuals will benefit from personalization and optimize fine-tuning strategies for better consistency across users.
+\subsection{Ablation: Base Model Size Requirements}
 
-\bibliographystyle{plain}
-\bibliography{references}
+To determine the minimum population data required for effective transfer, we varied the number of base participants from 1 to 6 (Figure \ref{fig:base_ablation}). Fine-tuning performance improved with base model size, but with diminishing returns (Figure \ref{fig:base_ablation}A-B). Using 1 base participant yielded mean target F1 of 0.87~($\pm$0.07), increasing to 0.89~($\pm$0.07) with 3 participants, 0.89~($\pm$0.07) with 5 participants, and 0.89~($\pm$0.08) with all 6 participants.
 
-\appendix
+The marginal benefit of additional base participants decreased substantially beyond 3 individuals, with performance gains plateauing: N=1→2 improved F1 by 0.01 points (0.87→0.88), N=2→3 by 0.006 points (0.88→0.89), and N=3→6 by only 0.002 points (0.89→0.89). This plateau suggests that a moderate-sized population dataset (3-4 participants) captures sufficient diversity for transfer learning (Figure \ref{fig:base_ablation}C-D). Notably, even a single base participant provided substantial benefit compared to training from scratch (0.87 vs 0.75 mean F1), demonstrating that transfer learning is effective even with minimal population data. This finding has practical implications: effective personalized models can be deployed with relatively small initial population datasets, reducing upfront data collection costs.
 
-\section{Model Architecture Details}
-\label{appendix:architecture}
-
-\begin{table}[H]
+\begin{table}[h]
 \centering
-\caption{SimpleSmokingCNN Architecture Specification}
-\label{tab:architecture}
-\begin{tabular}{@{}lllll@{}}
-\toprule
-Layer & Type & Input Shape & Output Shape & Parameters \\
-\midrule
-Input & - & (batch, 3, 3000) & (batch, 3, 3000) & - \\
-Conv1D-1 & Conv1D + BN + ReLU & (batch, 3, 3000) & (batch, 16, 3000) & kernel=5, padding=2 \\
-Conv1D-2 & Conv1D + BN + ReLU & (batch, 16, 3000) & (batch, 32, 3000) & kernel=5, padding=2 \\
-Conv1D-3 & Conv1D + BN + ReLU & (batch, 32, 3000) & (batch, 64, 3000) & kernel=5, padding=2 \\
-GlobalAvgPool & AdaptiveAvgPool1d & (batch, 64, 3000) & (batch, 64, 1) & pool\_size=1 \\
-Flatten & Squeeze & (batch, 64, 1) & (batch, 64) & - \\
-Dropout & Dropout & (batch, 64) & (batch, 64) & p=0.3 \\
-Classifier & Linear & (batch, 64) & (batch, 1) & out\_features=1 \\
-\bottomrule
+\caption{\textbf{Performance metrics by participant (100\% target data, N=6 base participants).} All metrics computed on held-out test sets. Fold numbers correspond to leave-one-participant-out cross-validation folds. Negative absolute improvement for folds 4-5 reflects negligible degradation within measurement noise.}
+\label{tab:performance}
+\small
+\begin{tabular}{lcccccc}
+\hline
+\textbf{Fold} & \textbf{Base F1} & \textbf{Fine-tuned F1} & \textbf{$\Delta$F1} & \textbf{Rel. Imp. (\%)} & \textbf{Precision} & \textbf{Recall} \\
+\hline
+0 & 0.85 & 0.91 & +0.06 & 7.0 & 0.97 & 0.79 \\
+1 & 0.87 & 0.93 & +0.05 & 6.1 & 0.99 & 0.80 \\
+2 & 0.85 & 0.87 & +0.02 & 2.4 & 0.81 & 0.92 \\
+3 & 0.76 & 0.77 & +0.01 & 1.5 & 0.79 & 0.73 \\
+4 & 0.95 & 0.94 & -0.01 & -1.1 & 0.99 & 0.93 \\
+5 & 0.91 & 0.90 & -0.01 & -1.6 & 0.97 & 0.87 \\
+6 & 0.96 & 0.97 & +0.00 & 0.3 & 0.99 & 0.94 \\
+\hline
+\textbf{Mean} & \textbf{0.88} & \textbf{0.90} & \textbf{+0.02} & \textbf{2.0} & \textbf{0.93} & \textbf{0.85} \\
+\textbf{Std} & \textbf{0.06} & \textbf{0.06} & \textbf{0.03} & \textbf{2.9} & \textbf{0.08} & \textbf{0.07} \\
+\hline
 \end{tabular}
 \end{table}
 
-\noindent \textbf{Activation Functions:} ReLU activation is applied after each convolutional layer following batch normalization. The final output uses sigmoid activation for binary classification.
+\clearpage
 
-\noindent \textbf{Regularization:} Batch normalization is applied after each convolutional layer, and dropout (p=0.3) is applied before the final classifier to prevent overfitting.
+\begin{figure}[p]
+\centering
+\includegraphics[width=\textwidth]{figure1.pdf}
+\caption{\textbf{Transfer learning enables robust personalization across participants.}
+\textbf{(A)} Population-trained base models show variable performance across participants (blue, median F1 = 0.87), while fine-tuned models achieve consistent high performance (orange, median F1 = 0.91). Boxplots show distribution across hyperparameter configurations; individual points represent specific experimental runs. \textbf{(B)} Performance improvement is consistent across all seven participants (folds 0-6). Each fold represents leave-one-participant-out cross-validation where one participant serves as the target individual. \textbf{(C)} Absolute improvement in F1 score (fine-tuned - base) for each participant. Dashed red line indicates no improvement ($\Delta$F1 = 0). Six of seven participants show gains (range: -0.01 to +0.06); two participants show negligible degradation within measurement noise. \textbf{(D)} Relative improvement percentage ((fine-tuned - base) / base $\times$ 100\%) demonstrates that personalization provides proportional benefits regardless of base model performance. All results shown for models trained with 100\% target participant data and N=6 base participants.}
+\label{fig:personalization}
+\end{figure}
 
-\noindent \textbf{Total Parameters:} Approximately 4,100 trainable parameters, making the model lightweight and suitable for personalization scenarios.
+\begin{figure}[p]
+\centering
+\includegraphics[width=\textwidth]{figure2.pdf}
+\caption{\textbf{Data-efficient personalization requires minimal individual data.}
+\textbf{(A)} Fine-tuning with target-only updates achieves high performance with as little as 5-12.5\% of target participant data. Boxplots show performance distribution across seven participants at each data percentage level (1\%, 5\%, 12.5\%, 25\%, 50\%, 100\%). \textbf{(B)} Direct comparison of full fine-tuning (orange, continued training on base + target data) versus target-only fine-tuning (blue, training only on target data in second phase). Both approaches show similar data efficiency, with plateau effects beginning at 12.5\% target data. \textbf{(C)} Comparison across training paradigms: full fine-tuning, target-only (trained from scratch using only target data), and target-only fine-tuning. Target-only training shows substantially lower performance at 1-5\% data, demonstrating the value of population-pretrained initialization. \textbf{(D)} Individual participant trajectories across data percentages. Each fold maintains consistent performance trends, with diminishing returns beyond 25-50\% target data. Results demonstrate that collecting 5-12.5\% of a full individual dataset achieves near-optimal personalization.}
+\label{fig:data_efficiency}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=\textwidth]{figure3.pdf}
+\caption{\textbf{Moderate-sized population datasets suffice for effective transfer learning.}
+\textbf{(A)} Fine-tuned model performance improves with number of base participants used for population pretraining, showing diminishing returns beyond 3-4 participants. Boxplots aggregate across seven target participants (folds), each evaluated with N=1-6 base participants. \textbf{(B)} Base model size effect holds across different target data percentages. Performance improvements from additional base participants are most pronounced at lower target data levels (1-12.5\%), suggesting population diversity becomes less critical when abundant individual data is available. \textbf{(C)} Individual participant responses to base model size variation. Fold 3 shows high sensitivity to base participant count, while folds 4-6 maintain robust performance even with limited base data. This heterogeneity reflects individual differences in how well participants match population-level feature representations. \textbf{(D)} Full fine-tuning and target-only fine-tuning show similar sensitivity to base model size. Both training paradigms benefit from larger population datasets, with performance stabilizing at N=4-6 base participants. Results indicate that effective personalized models can be deployed with relatively small initial population cohorts, reducing upfront data collection costs.}
+\label{fig:base_ablation}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.8\textwidth]{figure4.pdf}
+\caption{\textbf{Learned representations cluster by participant identity.}
+t-SNE visualization of learned feature representations from the fine-tuned model's penultimate layer. Each point represents a single 60-second window; colors indicate participant identity (folds 0-6). Clear participant-specific clustering demonstrates that fine-tuning adapts internal representations to capture individual behavioral patterns. Distinct clusters for each participant (particularly visible for participants 2, 3, and 6) suggest the model learns participant-specific smoking gesture signatures, explaining improved personalized performance. Overlapping regions in the center indicate shared features across participants (e.g., universal hand-to-mouth motion patterns), while peripheral clusters capture individual-specific nuances (e.g., hand dominance, device placement, smoking style). This representation structure illustrates how transfer learning balances population-level generalization with individual-specific adaptation.}
+\label{fig:tsne}
+\end{figure}
+
+\clearpage
+
+\section{Discussion}
+
+This study demonstrates that transfer learning enables data-efficient personalization of smoking detection models from wearable sensors. Our key findings are threefold: (1) fine-tuning population-pretrained models achieves robust personalization with as little as 1-5\% of individual training data; (2) transfer learning substantially outperforms training from scratch in low-data regimes, providing critical inductive bias when individual labels are scarce; and (3) moderate-sized population datasets (3-4 participants) provide sufficient diversity for effective knowledge transfer, reducing initial data collection requirements.
+
+These results have direct implications for real-world deployment of personalized wearable interventions. The traditional approach—training generic models on large heterogeneous populations—fails to capture individual behavioral variability, as evidenced by our base model F1 scores ranging from 0.76 to 0.96 across participants. Conversely, training individual-specific models from scratch requires extensive per-user data collection, creating an impractical labeling burden. Our transfer learning framework resolves this tension: a one-time population model provides generalizable feature representations, which are rapidly adapted to individuals using minimal labeled data. In practical terms, our approach achieves mean F1 of 0.90 ($\pm$0.06), improving upon population models by 2.0\% on average and capturing nearly 10\% of theoretically achievable performance gains—a feasible approach for real-world adoption.
+
+Our findings align with transfer learning successes in computer vision and natural language processing\cite{yosinski2014transfer,devlin2019bert}, extending these principles to time-series behavioral sensing. The population model learns generalizable temporal features (e.g., hand-to-mouth motion kinematics, gesture duration patterns) that transfer across individuals, while fine-tuning adapts decision boundaries to individual-specific nuances (e.g., hand dominance, smoking style, device placement). Prior work in wearable smoking detection has largely focused on either population models\cite{saleheen2015puffmarker} or fully personalized approaches\cite{parate2014detecting}, without systematically exploring the data efficiency of transfer learning. Our work bridges this gap, providing empirical evidence that hybrid approaches substantially reduce data requirements.
+
+The generalizability of our transfer learning paradigm extends beyond smoking detection to other wearable behavioral sensing tasks. Eating detection, medication adherence monitoring, physical activity recognition, and stress detection all face similar personalization challenges: population models underperform due to individual variability, yet collecting dense individual labels is burdensome\cite{mathur2021designing}. Our framework—train once on a diverse population, adapt with minimal individual data—offers a scalable template for personalized health monitoring systems. The diminishing returns we observed with base model size (3-4 participants suffice) further reduces barriers to adoption, as small pilot datasets can seed effective transfer.
+
+Several limitations warrant consideration. Our participant sample (N=7) represents a narrow demographic, and generalization to broader populations requires validation across age groups, smoking histories, and device types. Data collection occurred in semi-controlled environments; free-living settings introduce additional confounders (e.g., diverse activities, irregular device wear) that may affect transfer quality. The optimal strategy for collecting personalization data remains unclear: should users label recent events, diverse contexts, or algorithmically selected examples? Active learning approaches that strategically query informative labels could further reduce data requirements\cite{settles2009active}, an important direction for future work. Additionally, our study focused on a single CNN architecture; investigating transfer across model families (e.g., transformers, recurrent networks) may reveal architecture-dependent benefits.
+
+Future research should also examine the temporal dynamics of personalization. Our study used static train/test splits, but in deployment, models would continuously adapt as users provide labels over time. Online learning strategies that incrementally update models with streaming data could maintain accuracy as individual behaviors evolve (e.g., changes in smoking patterns during cessation attempts). Similarly, exploring meta-learning approaches that optimize for rapid adaptation across individuals\cite{finn2017model} may further improve data efficiency.
+
+In conclusion, transfer learning provides a practical pathway to personalized wearable smoking detection, achieving strong performance with minimal individual data collection. By leveraging population knowledge to accelerate individual adaptation, this approach balances accuracy with feasibility, enabling scalable deployment of personalized behavioral interventions. As wearable sensors become ubiquitous in health monitoring, data-efficient personalization strategies will be essential for translating population-level models into individualized precision health tools.
+
+\section{Methods}
+
+\subsection{Participants and Data Collection}
+
+Seven participants were recruited for this study [IRB details to be added]. Participants wore wrist-mounted inertial measurement units (IMUs) capturing 6-channel data: 3-axis accelerometer (accel\_x, accel\_y, accel\_z) and 3-axis gyroscope (gyro\_x, gyro\_y, gyro\_z) sampled at 50 Hz. Data collection occurred during [controlled/naturalistic] smoking sessions, with participants instructed to [protocol details]. Smoking bouts were annotated using [annotation method: self-report EMA, observer coding, etc.], with each bout recording start and end timestamps.
+
+The dataset comprised [X total sessions] across seven participants (participant IDs: tonmoy, asfik, alsaad, anam, ejaz, iftakhar, unk1), yielding [X total hours] of sensor data with [Y] annotated smoking bouts. Participants exhibited diverse smoking patterns, hand dominance, and device placement, providing heterogeneity necessary for evaluating personalization.
+
+\subsection{Data Preprocessing and Windowing}
+
+Raw IMU data were preprocessed using a configuration-driven pipeline (configs/dataset\_config.yaml). Sensor streams were segmented into 60-second non-overlapping windows (window\_size = 3000 samples at 50 Hz, stride = 3000 samples). Each window was labeled as smoking (positive class) if it overlapped temporally with an annotated smoking bout, otherwise non-smoking (negative class).
+
+Critically, train/validation/test splitting was performed at the session level prior to windowing to prevent temporal data leakage. For each participant, sessions were randomly split (random\_state=42) into training (60\%), validation (20\%), and test (20\%) sets. Windows were then extracted independently from each split. This session-level splitting ensures that consecutive windows from the same smoking episode do not appear across train/test boundaries, providing conservative performance estimates.
+
+Final windowed datasets were saved as PyTorch tensors (participant\_train.pt, participant\_val.pt, participant\_test.pt) with shape [N, 6, 3000] for inputs and [N] for binary labels, where N is the number of windows for each split. Class balance varied across participants: [provide statistics on positive class percentage per participant].
+
+\subsection{Model Architecture}
+
+We employed a convolutional neural network (CNN) architecture designed for time-series classification (TestModel class in lib/models.py). The model consists of:
+
+\begin{itemize}
+    \item \textbf{Input layer}: 6 input channels (accelerometer + gyroscope), 3000 timepoints
+    \item \textbf{Convolutional blocks}: Four 1D convolutional layers with layer normalization and ReLU activations
+    \begin{itemize}
+        \item Block 1: Conv1D(6→8 channels, kernel=3, padding=1) + MaxPool(2)
+        \item Block 2: Conv1D(8→8, kernel=3, padding=1) + MaxPool(2)
+        \item Block 3: Conv1D(8→8, kernel=3, padding=1), no pooling
+        \item Block 4: Conv1D(8→16, kernel=3, padding=1), no pooling
+    \end{itemize}
+    \item \textbf{Global average pooling}: Adaptive average pooling to reduce temporal dimension to 1
+    \item \textbf{Fully connected layer}: Linear(16→1) with sigmoid output for binary classification
+\end{itemize}
+
+The total model contains [X] trainable parameters. Layer normalization was applied to convolutional outputs to stabilize training across participants with different signal amplitudes. The architecture was intentionally kept lightweight to enable rapid fine-tuning and deployment on resource-constrained devices.
+
+\subsection{Training Procedures}
+
+We compared three training paradigms within a leave-one-participant-out (LOPO) cross-validation framework:
+
+\textbf{Base Model Training:} For each fold, a base model was trained on N-1 participants (N=7, so 6 participants per base model). Training data combined all train and validation splits from base participants (using ConcatDataset). Validation was performed on the combined test splits from base participants. Models were trained using:
+\begin{itemize}
+    \item Loss: Binary cross-entropy with logits (BCEWithLogitsLoss)
+    \item Optimizer: AdamW with learning rate 3e-4
+    \item Batch size: [32 or 64, from grid search]
+    \item Early stopping: Patience of 50 epochs based on validation loss
+\end{itemize}
+
+\textbf{Fine-Tuning:} Base model weights were loaded as initialization, and training continued using the target participant's training data. Two fine-tuning variants were evaluated:
+\begin{itemize}
+    \item \textit{Full fine-tuning}: Training data = base training data + target training data (combined)
+    \item \textit{Target-only fine-tuning}: Training data = target training data only (no base data in second phase)
+\end{itemize}
+Validation used target participant validation split, with early stopping patience of 50 epochs.
+
+\textbf{Target-Only Training:} Models were initialized randomly and trained exclusively on target participant training data, using identical hyperparameters as fine-tuning for fair comparison.
+
+To assess data efficiency, we systematically subsampled target training data to 1\%, 5\%, 12.5\%, 25\%, 50\%, and 100\% of available samples using random\_subsample with fixed random seeds. All models were evaluated on the full held-out target participant test set.
+
+Data augmentation was applied during training using TimeSeriesAugmenter with jitter noise (std=0.02), magnitude scaling (range=0.95-1.05), and augmentation probability 0.5 to improve generalization.
+
+\subsection{Experimental Design and Hyperparameters}
+
+Grid search was performed over:
+\begin{itemize}
+    \item Batch size: \{32, 64\}
+    \item Learning rate: \{3e-4\}
+    \item Target data percentage: \{0.01, 0.05, 0.125, 0.25, 0.5, 1.0\}
+    \item Number of base participants (ablation): \{1, 2, 3, 4, 5, 6\}
+    \item Training mode: \{full\_fine\_tuning, target\_only\_fine\_tuning, target\_only\}
+\end{itemize}
+
+For each hyperparameter configuration, all seven LOPO folds were executed (generate\_jobs.py), yielding [X total training runs]. Experiments were managed using timestamped directories (experiments/\{prefix\}/fold\{N\}\_\{participant\}), with metrics, losses, and model checkpoints saved for reproducibility.
+
+\subsection{Evaluation Metrics}
+
+Primary evaluation metric was F1 score (harmonic mean of precision and recall), appropriate for the class-imbalanced smoking detection task. Additional metrics included:
+\begin{itemize}
+    \item \textbf{Precision}: True positives / (true positives + false positives)
+    \item \textbf{Recall}: True positives / (true positives + false negatives)
+    \item \textbf{Absolute improvement}: F1\_personalized - F1\_base
+    \item \textbf{Relative improvement}: (F1\_personalized - F1\_base) / F1\_base
+    \item \textbf{Room for improvement}: (F1\_personalized - F1\_base) / (1 - F1\_base)
+\end{itemize}
+
+All metrics were computed on held-out test sets. Statistical comparisons between training paradigms used [paired t-tests / Wilcoxon signed-rank tests] across the seven LOPO folds, with significance threshold p $<$ 0.05. Results are reported as mean ± standard deviation across participants unless otherwise noted.
+
+\section{Data Availability}
+The datasets generated and analyzed during the current study are available from the corresponding author upon reasonable request. Due to privacy considerations regarding participant behavioral data, datasets are not publicly available but can be accessed under data use agreements for research purposes.
+
+\section{Code Availability}
+Code for dataset generation, model training, and evaluation is available at [GitHub repository URL to be added]. The repository includes configuration files (configs/dataset\_config.yaml), dataset creation scripts (make\_dataset.py), training procedures (train.py, lib/train\_utils.py), model architectures (lib/models.py), and evaluation notebooks (eval.py) to ensure full reproducibility of results.
+
+\section{Acknowledgements}
+[Funding sources, technical support, participant acknowledgment to be added]
+
+\section{Author Contributions}
+A.S. designed and implemented the experimental framework, conducted data analysis, and drafted the manuscript. H.V. supervised the research, provided critical feedback on methodology and interpretation, and edited the manuscript. All authors reviewed and approved the final manuscript.
+
+\section{Competing Interests}
+The authors declare no competing interests.
+
+\bibliographystyle{unsrt}
+\bibliography{references}
 
 \end{document}

@@ -26,9 +26,9 @@ parser.add_argument('--device', type=int, default=0, help='GPU device index')
 args = parser.parse_args()
 
 GRID_PARAMS = {
-    'batch_size': [32],
+    'batch_size': [64],
     'lr': [3e-4],
-    'patience': [5],
+    'patience': [1000],
     'mode': ['target_only'],  # 'full_fine_tuning', 'target_only', 'target_only_fine_tuning'
     'target_data_pct': [1.0],  # 0.05, 0.1, 0.25, 0.5, 1.0,
     'n_base_participants': [1],  # 1, 2, all, must be <= number of participants - 1
@@ -39,7 +39,7 @@ FIXED_PARAMS = {
     'model': 'test',
     'use_augmentation': True,
     'data_path': 'data/001_60s_window',
-    'participants': ['tonmoy','asfik'],
+    'participants': ['ritwik','tj','mariah','stephanie','dennis','will'],  # 'ejaz' is target participant
     'window_size': 3000,
 }
 
@@ -76,7 +76,7 @@ def run_experiments():
             
         n_base_participants = params['n_base_participants']
 
-        for fold,participant in enumerate(FIXED_PARAMS['participants'][:1]):
+        for fold,participant in enumerate(FIXED_PARAMS['participants']):
             cmd = [
                 'python3', 'train.py',
                 '--fold', str(fold),
