@@ -149,7 +149,7 @@ def main():
     # Setup augmentation if enabled
     augmenter = None
     if hyperparameters['use_augmentation']:
-        from lib.utils import TimeSeriesAugmenter
+        from lib.train_utils import TimeSeriesAugmenter
         augmenter = TimeSeriesAugmenter({
             'jitter_noise_std': hyperparameters['jitter_std'],
             'magnitude_scale_range': hyperparameters['magnitude_range'],
@@ -184,10 +184,6 @@ def main():
     print(f"\nStarting base model training (max {early_stopping_patience} epochs patience)...\n")
 
     while True:
-        if epoch >= 500:
-            print("Maximum epochs reached (500).")
-            break
-
         start_time = time()
 
         # Training step

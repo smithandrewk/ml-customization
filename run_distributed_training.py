@@ -288,8 +288,10 @@ class GPUWorker(threading.Thread):
             cmd += f" --magnitude_range {magnitude_range[0]} {magnitude_range[1]}"
             cmd += f" --aug_prob {aug_prob}"
 
-        # Add any extra arguments
+        # Add any extra arguments (skip internal fields starting with underscore)
         for key, value in extra_args.items():
+            if key.startswith('_'):
+                continue
             if isinstance(value, bool):
                 if value:
                     cmd += f" --{key}"
@@ -613,8 +615,7 @@ Example usage:
       {"host": "server1.example.com", "user": "myuser", "gpus": 2},
       {"host": "server2.example.com", "user": "myuser", "gpus": 1, "ssh_key": "~/.ssh/id_rsa"},
       {"host": "192.168.1.100", "user": "myuser", "gpus": 2, "port": 2222}
-    ],
-    "script_path": "train.py"
+    ]
   }
 
   Note: Script runs from ~/ml-customization directory on remote machines
@@ -635,7 +636,7 @@ Example usage:
     parser.add_argument('--jobs-config', required=False, default='jobs_config.json',
                        help='Path to JSON file with job configurations')
     parser.add_argument('--script-path', default='train.py',
-                       help='Path to train.py relative to ~/ml-customization (can be overridden in cluster config)')
+                       help='Path to training script relative to ~/ml-customization')
     parser.add_argument('--log-file', help='Path to save execution log (JSON format)')
     parser.add_argument('--tmux-session', default='ml_training',
                        help='Name of tmux session to create (default: ml_training)')
@@ -665,14 +666,11 @@ Example usage:
     with open(args.jobs_config) as f:
         jobs = json.load(f)
 
-    # Get script path (from cluster config or command line)
-    script_path = cluster_config.get('script_path', args.script_path)
-
     # Run distributed jobs
     run_distributed_jobs(
         gpus=gpus,
         jobs=jobs,
-        script_path=script_path,
+        script_path=args.script_path,
         verbose=not args.quiet,
         log_file=args.log_file,
         tmux_session=args.tmux_session

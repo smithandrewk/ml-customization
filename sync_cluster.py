@@ -56,7 +56,8 @@ def run_command_on_server(server: Dict[str, any], command: str, verbose: bool = 
 
 
 def sync_cluster(cluster_config_path: str, clean_experiments: bool = False,
-                git_pull: bool = True, push_first: bool = False, verbose: bool = True):
+                git_pull: bool = True, push_first: bool = False, branch: str = "main",
+                verbose: bool = True):
     """
     Sync code to all servers in cluster and optionally clean experiments.
 
@@ -65,6 +66,7 @@ def sync_cluster(cluster_config_path: str, clean_experiments: bool = False,
         clean_experiments: If True, remove experiments directory on each server
         git_pull: If True, run git pull on each server
         push_first: If True, push local changes to origin first
+        branch: Git branch to checkout (default: main)
         verbose: Print detailed output
     """
     # Load cluster configuration
@@ -77,6 +79,7 @@ def sync_cluster(cluster_config_path: str, clean_experiments: bool = False,
     print(f"Cluster Sync")
     print(f"{'='*80}")
     print(f"Servers: {len(servers)}")
+    print(f"Branch: {branch}")
     print(f"Git pull: {git_pull}")
     print(f"Push first: {push_first}")
     print(f"Clean experiments: {clean_experiments}")
@@ -118,12 +121,12 @@ def sync_cluster(cluster_config_path: str, clean_experiments: bool = False,
 
         # Git pull
         if git_pull:
-            # First checkout main branch
-            checkout_cmd = f"{base_cmd} && git fetch origin && git checkout main"
+            # First checkout specified branch
+            checkout_cmd = f"{base_cmd} && git fetch origin && git checkout {branch}"
             returncode, stdout, stderr = run_command_on_server(server, checkout_cmd, verbose)
 
             if returncode == 0:
-                print(f"[{host_string}] ✓ Checked out main")
+                print(f"[{host_string}] ✓ Checked out {branch}")
             else:
                 print(f"[{host_string}] ✗ Failed to checkout branch - continuing anyway")
                 print(f"[{host_string}] ⚠ Warning: May be on wrong branch")
@@ -138,8 +141,8 @@ def sync_cluster(cluster_config_path: str, clean_experiments: bool = False,
                 # If git pull fails, try to fetch and reset to origin
                 print(f"[{host_string}] Regular git pull failed, trying fetch and reset...")
 
-                # Fetch and reset to main
-                reset_cmd = f"{base_cmd} && git fetch origin && git reset --hard origin/main"
+                # Fetch and reset to specified branch
+                reset_cmd = f"{base_cmd} && git fetch origin && git reset --hard origin/{branch}"
                 returncode, stdout, stderr = run_command_on_server(server, reset_cmd, verbose)
 
                 if returncode == 0:
@@ -202,6 +205,8 @@ Examples:
                        help='Skip git pull (only used with --clean)')
     parser.add_argument('--push-first', action='store_true',
                        help='Push local changes to origin before syncing servers')
+    parser.add_argument('--branch', default='main',
+                       help='Git branch to checkout on servers (default: main)')
     parser.add_argument('--quiet', action='store_true',
                        help='Reduce output verbosity')
 
@@ -215,6 +220,7 @@ Examples:
         clean_experiments=args.clean,
         git_pull=not args.no_git_pull,
         push_first=args.push_first,
+        branch=args.branch,
         verbose=not args.quiet
     )
 
