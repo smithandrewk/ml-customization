@@ -85,9 +85,10 @@ def main():
         print(f"Experiment directory: {new_exp_dir}")
         print(f"{'='*80}\n")
 
-        # Load base model
-        base_model_path = f'base_models/{base_model_hash}.pt'
-        metadata_path = f'base_models/{base_model_hash}_metadata.json'
+        # Load base model from experiments directory
+        base_exp_dir = f'experiments/base_{base_model_hash}/fold{fold}_{target_participant}'
+        base_model_path = f'{base_exp_dir}/best_base_model.pt'
+        metadata_path = f'{base_exp_dir}/metrics.json'
 
         if not os.path.exists(base_model_path):
             raise ValueError(f"Base model not found: {base_model_path}. "
@@ -101,9 +102,9 @@ def main():
             base_metadata = json.load(f)
 
         print(f"Loading base model from: {base_model_path}")
-        print(f"Base model was trained on: {base_metadata['base_participants']}")
-        print(f"Base model best val loss: {base_metadata['metrics']['best_val_loss']:.4f}")
-        print(f"Base model best val F1: {base_metadata['metrics']['best_val_f1']:.4f}\n")
+        print(f"Base model hash: {base_metadata.get('base_model_hash', 'N/A')}")
+        print(f"Base model best val loss: {base_metadata.get('best_val_loss', 'N/A')}")
+        print(f"Base model best val F1: {base_metadata.get('best_val_f1', 'N/A')}\n")
 
         # Create model and load base weights
         model_type = hyperparameters['model']
@@ -124,7 +125,7 @@ def main():
     # Setup augmentation if enabled
     augmenter = None
     if hyperparameters['use_augmentation']:
-        from lib.utils import TimeSeriesAugmenter
+        from lib.train_utils import TimeSeriesAugmenter
         augmenter = TimeSeriesAugmenter({
             'jitter_noise_std': hyperparameters['jitter_std'],
             'magnitude_scale_range': hyperparameters['magnitude_range'],
@@ -252,9 +253,9 @@ def main():
             print(f'Epoch {epoch:3d} | Train Loss: {train_loss:.4f}, Train F1: {train_f1:.4f} | '
                   f'Val Loss: {loss:.4f}, Val F1: {f1:.4f} | Patience: {patience_counter}/{early_stopping_patience}')
 
-        # Plot progress
+        # Plot progress (using base_training style since we only have one phase)
         if epoch % 5 == 0:
-            plot_loss_and_f1(lossi, new_exp_dir, metrics, patience_counter)
+            plot_base_training(lossi, new_exp_dir, metrics, patience_counter)
 
         epoch += 1
 
@@ -287,7 +288,7 @@ def main():
 
     # Save final metrics and losses
     save_metrics_and_losses(metrics, lossi, hyperparameters, new_exp_dir)
-    plot_loss_and_f1(lossi, new_exp_dir, metrics, patience_counter)
+    plot_base_training(lossi, new_exp_dir, metrics, patience_counter)
 
     print(f"Results saved to: {new_exp_dir}")
 

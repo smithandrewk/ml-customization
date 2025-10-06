@@ -98,17 +98,17 @@ def main():
     print(f"Base model hash: {base_model_hash}")
     print(f"{'='*80}\n")
 
-    # Create base_models directory
-    os.makedirs('base_models', exist_ok=True)
+    # Create experiment directory with hash as prefix
+    exp_prefix = f"base_{base_model_hash}"
+    new_exp_dir = f'experiments/{exp_prefix}/fold{fold}_{target_participant}'
 
-    # Check if this base model already exists
-    base_model_path = f'base_models/{base_model_hash}.pt'
-    metadata_path = f'base_models/{base_model_hash}_metadata.json'
-
-    if os.path.exists(base_model_path):
-        print(f"Base model already exists at {base_model_path}")
-        print(f"Skipping training. Delete the file to retrain.")
+    if os.path.exists(new_exp_dir):
+        print(f"Base model experiment already exists at {new_exp_dir}")
+        print(f"Skipping training. Delete the directory to retrain.")
         return
+
+    os.makedirs(new_exp_dir, exist_ok=False)
+    print(f"Created experiment directory: {new_exp_dir}\n")
 
     # Load base participant data
     print("Loading base participant data...")
@@ -205,7 +205,7 @@ def main():
             best_val_loss = loss
             metrics['best_val_loss'] = best_val_loss
             metrics['best_val_loss_epoch'] = epoch
-            torch.save(model.state_dict(), f'{base_model_path}.tmp')
+            torch.save(model.state_dict(), f'{new_exp_dir}/best_base_model.pt')
             patience_counter = 0
         else:
             patience_counter += 1
@@ -218,46 +218,37 @@ def main():
         # Check early stopping
         if patience_counter >= early_stopping_patience:
             print(f"\nEarly stopping triggered at epoch {epoch}")
+            torch.save(model.state_dict(), f'{new_exp_dir}/last_base_model.pt')
             break
 
-        # Progress output
+        # Progress output and plotting
         if epoch % 5 == 0:
             print(f'Epoch {epoch:3d} | Train Loss: {train_loss:.4f}, Train F1: {train_f1:.4f} | '
                   f'Val Loss: {loss:.4f}, Val F1: {f1:.4f} | Patience: {patience_counter}/{early_stopping_patience}')
+            # Plot using train.py style (but adapted for base-only training)
+            plot_base_training(lossi, new_exp_dir, metrics, patience_counter)
 
         epoch += 1
 
     metrics['total_epochs'] = epoch
 
-    # Move best model to final location
-    if os.path.exists(f'{base_model_path}.tmp'):
-        os.rename(f'{base_model_path}.tmp', base_model_path)
-        print(f"\n{'='*80}")
-        print(f"Base model saved to: {base_model_path}")
-        print(f"Best validation loss: {metrics['best_val_loss']:.4f} (epoch {metrics['best_val_loss_epoch']})")
-        print(f"Best validation F1: {metrics['best_val_f1']:.4f} (epoch {metrics['best_val_f1_epoch']})")
-        print(f"Total epochs trained: {metrics['total_epochs']}")
-        print(f"{'='*80}\n")
-    else:
-        print("Warning: No best model was saved (training may have failed)")
-        return
+    # Final summary
+    print(f"\n{'='*80}")
+    print(f"Base Model Training Complete")
+    print(f"{'='*80}")
+    print(f"Experiment directory: {new_exp_dir}")
+    print(f"Base model hash: {base_model_hash}")
+    print(f"Best validation loss: {metrics['best_val_loss']:.4f} (epoch {metrics['best_val_loss_epoch']})")
+    print(f"Best validation F1: {metrics['best_val_f1']:.4f} (epoch {metrics['best_val_f1_epoch']})")
+    print(f"Total epochs trained: {metrics['total_epochs']}")
+    print(f"{'='*80}\n")
 
-    # Save metadata
-    metadata = {
-        'base_model_hash': base_model_hash,
-        'config': hyperparameters,
-        'target_participant': target_participant,
-        'base_participants': participants,
-        'metrics': metrics,
-        'losses': lossi,
-    }
+    # Save metrics, losses, and hyperparameters
+    metrics['base_model_hash'] = base_model_hash
+    save_metrics_and_losses(metrics, lossi, hyperparameters, new_exp_dir)
+    plot_base_training(lossi, new_exp_dir, metrics, patience_counter)
 
-    with open(metadata_path, 'w') as f:
-        json.dump(metadata, f, indent=2)
-
-    print(f"Metadata saved to: {metadata_path}")
-    print(f"\nBase model training complete!")
-    print(f"Hash: {base_model_hash}")
+    print(f"Results saved to: {new_exp_dir}")
 
 
 if __name__ == '__main__':

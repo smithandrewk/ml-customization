@@ -86,6 +86,41 @@ def plot_loss_and_f1(lossi, new_exp_dir, metrics, patience_counter):
     plt.savefig(f'f1.jpg', bbox_inches='tight')
     plt.close()
 
+def plot_base_training(lossi, new_exp_dir, metrics, patience_counter):
+    """Plot training curves for base model training (no target phase)."""
+    plt.figure(figsize=(7.2,4.48),dpi=300)
+    plt.plot(lossi['train_loss'], label='Train Loss', color='b')
+    plt.plot(lossi['val_loss'], label='Val Loss', color='b', linestyle='--')
+
+    if metrics['best_val_loss_epoch'] is not None and metrics['best_val_loss'] is not None:
+        plt.axhline(y=metrics['best_val_loss'], color='b', linestyle='--', label='Best Val Loss', alpha=0.5)
+        plt.axvline(x=metrics['best_val_loss_epoch'], color='b', linestyle='--', alpha=0.5)
+
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.yscale('log')
+    plt.title(f'Base Model Training - Patience: {patience_counter}')
+    plt.savefig(f'{new_exp_dir}/loss.jpg', bbox_inches='tight')
+    plt.savefig(f'loss.jpg', bbox_inches='tight')
+    plt.close()
+
+    plt.figure(figsize=(7.2,4.48),dpi=300)
+    plt.plot(lossi['train_f1'], label='Train F1', color='b')
+    plt.plot(lossi['val_f1'], label='Val F1', color='b', linestyle='--')
+
+    if metrics['best_val_f1_epoch'] is not None and metrics['best_val_f1'] is not None:
+        plt.axhline(y=metrics['best_val_f1'], color='b', linestyle='--', label='Best Val F1', alpha=0.5)
+        plt.axvline(x=metrics['best_val_f1_epoch'], color='b', linestyle='--', alpha=0.5)
+
+    plt.xlabel('Epoch')
+    plt.ylabel('F1')
+    plt.legend()
+    plt.title(f'Base Model Training - Patience: {patience_counter}')
+    plt.savefig(f'{new_exp_dir}/f1.jpg', bbox_inches='tight')
+    plt.savefig(f'f1.jpg', bbox_inches='tight')
+    plt.close()
+
 def load_data(config):
     dataset_name = config['dataset'].get('name', 'default_dataset')
     data_path = f'data/{dataset_name}'

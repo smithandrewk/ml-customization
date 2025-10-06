@@ -30,6 +30,8 @@ target_participant = participants[fold]
 hyperparameters['target_participant'] = target_participant
 
 new_exp_dir = f'experiments/{experiment_prefix}/fold{fold}_{target_participant}'
+if os.path.exists(new_exp_dir):
+    raise ValueError(f"Experiment directory already exists: {new_exp_dir}. Please use a different prefix or remove the existing directory.")
 os.makedirs(new_exp_dir, exist_ok=False)
 
 if hyperparameters['mode'] == 'target_only':

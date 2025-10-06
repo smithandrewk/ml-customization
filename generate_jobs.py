@@ -20,7 +20,7 @@ GRID_PARAMS = {
     'early_stopping_patience': [5],
     'mode': ['target_only_fine_tuning'],
     'target_data_pct': [0.01, 0.05, 0.125, 0.25, 0.5, 1.0],
-    'n_base_participants': [6],
+    'n_base_participants': [2],
 }
 
 # Fixed parameters
