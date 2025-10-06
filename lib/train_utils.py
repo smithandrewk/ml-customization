@@ -147,7 +147,6 @@ def plot_loss_and_f1_refactored(lossi, new_exp_dir):
     plt.close()
     
 def random_subsample(dataset, pct):
-    print(f'Subsampling dataset to {pct*100}% of original size')
     original_size = len(dataset)
     subset_size = int(original_size * pct)
 

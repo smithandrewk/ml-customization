@@ -1,257 +1,73 @@
 \begin{thebibliography}{10}
 
-\bibitem{abotabik2020smart}
-Maryam Abo-Tabik, Nicholas Costen, John Darby, and Yael Benn.
-\newblock Towards a smart smoking cessation app: A 1d-cnn model predicting
-  smoking events.
-\newblock {\em Sensors}, 20(4):1099, 2020.
+\bibitem{who2021tobacco}
+{World Health Organization}.
+\newblock Tobacco fact sheet, 2021.
 
-\bibitem{patient_monitoring_2020}
-Basem Almaslukh, Ayman~M Artoli, and Jalal Al-Muhtadi.
-\newblock Accelerometer-based human activity recognition for patient monitoring
-  using a deep neural network.
-\newblock {\em Sensors}, 20(20):5870, 2020.
+\bibitem{nahum2018just}
+I.~Nahum-Shani, S.~N. Smith, B.~J. Spring, et~al.
+\newblock Just-in-time adaptive interventions (jitais) in mobile health: Key
+  components and design principles for ongoing health behavior support.
+\newblock {\em Annals of Behavioral Medicine}, 52(6):446--462, 2018.
 
-\bibitem{chato2023survey}
-Lina Chato and Emma Regentova.
-\newblock Survey of transfer learning approaches in the machine learning of
-  digital health sensing data.
-\newblock {\em Journal of Personalized Medicine}, 13(12):1703, 2023.
+\bibitem{sazonov2013smoke}
+E.~Sazonov, P.~Lopez-Meyer, and S.~Tiffany.
+\newblock A wearable sensor system for monitoring cigarette smoking.
+\newblock {\em Journal of Studies on Alcohol and Drugs}, 74(6):956--964, 2013.
 
-\bibitem{wpt_health_2024}
-Yuqi Chen, Yongzhi Jin, and Gao Jiri.
-\newblock Health monitoring of cnc machining processes using machine learning
-  and wavelet packet transform.
-\newblock {\em Mechanical Systems and Signal Processing}, 213:111321, 2024.
+\bibitem{saleheen2015puffmarker}
+N.~Saleheen, A.~A. Ali, S.~M. Hossain, et~al.
+\newblock puffmarker: a multi-sensor approach for pinpointing the timing of
+  first lapse in smoking cessation.
+\newblock {\em Proceedings of the ACM International Joint Conference on
+  Pervasive and Ubiquitous Computing}, pages 999--1010, 2015.
 
-\bibitem{smartband2024feasibility}
-Afsaneh Doryab, Natalie Chikarsel, Robert Rosenman, and Min-Jeong Yang.
-\newblock Smartband-based smoking detection and real-time brief mindfulness
-  intervention: findings from a feasibility clinical trial.
-\newblock {\em Translational Behavioral Medicine}, 14(3):149--158, 2024.
+\bibitem{tang2020individualized}
+Q.~Tang, D.~Byrne, I.~Nahum-Shani, et~al.
+\newblock Toward individualized just-in-time adaptive interventions.
+\newblock {\em IEEE Journal of Biomedical and Health Informatics},
+  24(9):2487--2498, 2020.
 
-\bibitem{esteva2021deep}
-Andre Esteva, Katherine Chou, Serena Yeung, Nikhil Naik, Ali Madani, Ali
-  Mottaghi, Yun Liu, Eric Topol, Jeff Dean, and Richard Socher.
-\newblock Deep learning-enabled medical computer vision.
-\newblock {\em npj Digital Medicine}, 4(1):5, 2021.
+\bibitem{stone2007patient}
+A.~A. Stone and S.~Shiffman.
+\newblock Ecological momentary assessment in behavioral medicine.
+\newblock {\em Annals of Behavioral Medicine}, 16(3):199--202, 2007.
 
-\bibitem{fu2021personalized}
-Zhongzheng Fu, Xinrun He, Enkai Wang, Jun Huo, Jian Huang, and Dongrui Wu.
-\newblock Personalized human activity recognition based on integrated wearable
-  sensor and transfer learning.
-\newblock {\em Sensors}, 21(3):885, 2021.
+\bibitem{yosinski2014transfer}
+J.~Yosinski, J.~Clune, Y.~Bengio, and H.~Lipson.
+\newblock How transferable are features in deep neural networks?
+\newblock In {\em Advances in Neural Information Processing Systems}, pages
+  3320--3328, 2014.
 
-\bibitem{goodfellow2016deep}
-Ian Goodfellow, Yoshua Bengio, and Aaron Courville.
-\newblock Deep learning.
-\newblock {\em MIT press}, 2016.
+\bibitem{devlin2019bert}
+J.~Devlin, M.~W. Chang, K.~Lee, and K.~Toutanova.
+\newblock Bert: Pre-training of deep bidirectional transformers for language
+  understanding.
+\newblock {\em Proceedings of NAACL-HLT}, pages 4171--4186, 2019.
 
-\bibitem{ml2023prediction}
-Hui Guo, Xinhui Lu, Yue Wang, Yuxin Wang, and Xi~Chen.
-\newblock Predictors of smoking cessation outcomes identified by machine
-  learning: A systematic review.
-\newblock {\em International Journal of Medical Informatics}, 177:105134, 2023.
+\bibitem{parate2014detecting}
+A.~Parate, M.~C. Chiu, C.~Chadowitz, et~al.
+\newblock Risq: recognizing smoking gestures with inertial sensors on a
+  wristband.
+\newblock In {\em Proceedings of the 12th ACM International Conference on
+  Mobile Systems, Applications, and Services}, pages 149--161, 2014.
 
-\bibitem{howard2018universal}
-Jeremy Howard and Sebastian Ruder.
-\newblock Universal language model fine-tuning for text classification.
-\newblock {\em arXiv preprint arXiv:1801.06146}, 2018.
+\bibitem{mathur2021designing}
+A.~Mathur, M.~Van~den Broeck, G.~Vandenberg, et~al.
+\newblock Designing and evaluating contextualized privacy mechanisms in
+  quantified self technologies.
+\newblock {\em Proceedings of the ACM on Interactive, Mobile, Wearable and
+  Ubiquitous Technologies}, 5(1):1--33, 2021.
 
-\bibitem{hsieh2023distilling}
-Cheng-Yu Hsieh, Chun-Liang Li, Chih-Kuan Yeh, Hootan Nakhost, Yasuhisa Fujii,
-  Alexander Ratner, Ranjay Krishna, Chen-Yu Lee, and Tomas Pfister.
-\newblock Distilling step-by-step! outperforming larger language models with
-  less training data and smaller model sizes.
-\newblock In {\em Findings of the Association for Computational Linguistics:
-  ACL 2023}, pages 8003--8017, 2023.
+\bibitem{settles2009active}
+B.~Settles.
+\newblock Active learning literature survey.
+\newblock {\em Computer Sciences Technical Report}, 1648, 2009.
 
-\bibitem{smoking_realtime_2022}
-Masudul~H Imtiaz, Delwar Hossain, Volkan~Y Senyurek, Prajakta Belsare, Stephen
-  Tiffany, and Edward Sazonov.
-\newblock Real-time prediction of smoking activity using machine learning based
-  multi-class classification model.
-\newblock {\em Multimedia Tools and Applications}, 81(29):42391--42411, 2022.
-
-\bibitem{biomedical_tsc_2022}
-Lerina Ismail and Huned Materwala.
-\newblock A systematic review of time series classification techniques used in
-  biomedical applications.
-\newblock {\em Sensors}, 22(20):8016, 2022.
-
-\bibitem{student_activity_2024}
-Muhammad~Attique Khan, Majed Alhaisoni, Abdullah Alqahtani, Shtwai Alsubai, and
-  Adel Binbusayyis.
-\newblock A hybrid deep approach to recognizing student activity and monitoring
-  health physique based on accelerometer data from smartphones.
-\newblock {\em Scientific Reports}, 14(1):3276, 2024.
-
-\bibitem{ehealth2024systematic}
-Selina Khoo, CS~Tan, and KW~Tay.
-\newblock Efficacy of e-health interventions for smoking cessation management
-  in smokers: a systematic review and meta-analysis.
-\newblock {\em BMC Public Health}, 24:976, 2024.
-
-\bibitem{kiranyaz2021d}
-Serkan Kiranyaz, Onur Avci, Osama Abdeljaber, Turker Ince, Moncef Gabbouj, and
-  Daniel~J Inman.
-\newblock 1d convolutional neural networks and applications: A survey.
-\newblock {\em Mechanical Systems and Signal Processing}, 151:107398, 2021.
-
-\bibitem{dilated_multivariate_2019}
-Arthur Le~Guennec, Simon Malinowski, and Romain Tavenard.
-\newblock Multivariate time series classification using dilated convolutional
-  neural networks.
-\newblock {\em arXiv preprint arXiv:1905.01697}, 2019.
-
-\bibitem{lecun2015deep}
-Yann LeCun, Yoshua Bengio, and Geoffrey Hinton.
-\newblock Deep learning.
-\newblock {\em Nature}, 521(7553):436--444, 2015.
-
-\bibitem{leppin2025perspectives}
-C~Leppin, O~Berhe, N~Boumparis, S~Kuhn, DD~Ebert, and H~Baumeister.
-\newblock Exploring perspectives on digital smoking cessation just-in-time
-  adaptive interventions: A focus group study with adult smokers and smoking
-  cessation professionals.
-\newblock {\em PLOS Digital Health}, 4(5):e0000705, 2025.
-
-\bibitem{gait_analysis_2024}
-Junbo Li, Huangkai Wang, Jiatong Zhang, Zixuan Wang, Qi~Li, Shurong Sun, Yiwen
-  Jiang, Yuan Shu, Dong Wang, and Jingquan Liu.
-\newblock In-sensor human gait analysis with machine learning in a wearable
-  microfabricated accelerometer.
-\newblock {\em Communications Engineering}, 3(1):29, 2024.
-
-\bibitem{liu2024cattle}
-Xiaofei Liu, Hao Wang, PPJ van~der Tol, Marjolein Hemeryck, and Suresh
-  Neethirajan.
-\newblock Cattle behavior recognition from accelerometer data: Leveraging
-  in-situ cross-device model learning.
-\newblock {\em Computers and Electronics in Agriculture}, 217:109372, 2024.
-
-\bibitem{1d_cnn_har_2021}
-Debanjan Mukherjee, Richi Mondal, Pawan~Kumar Singh, Ram Sarkar, and Debotosh
-  Bhattacharjee.
-\newblock 1d convolution approach to human activity recognition using sensor
-  data and comparison with machine learning algorithms.
-\newblock {\em ICT Express}, 7(4):473--478, 2021.
-
-\bibitem{cnn_lstm_2023}
-Osama Nafea, Wasswa Abdul, Ghulam Muhammad, and Mansour Alsulaiman.
-\newblock A new cnn-lstm architecture for activity recognition employing
-  wearable motion sensor data: Enabling diverse feature extraction.
-\newblock {\em Information Sciences}, 642:119237, 2023.
-
-\bibitem{behavioral2024activation}
-Samar Obeid, Richard~A Brown, Jasper~AJ Smits, Gareth~R Dutton, Michael~J
-  Zvolensky, and Michael~W Otto.
-\newblock Individual predictors of response to a behavioral activation-based
-  digital smoking cessation intervention: A machine learning approach.
-\newblock {\em Substance Use \& Misuse}, 59(5):732--740, 2024.
-
-\bibitem{oord2016wavenet}
-Aaron van~den Oord, Sander Dieleman, Heiga Zen, Karen Simonyan, Oriol Vinyals,
-  Alex Graves, Nal Kalchbrenner, Andrew Senior, and Koray Kavukcuoglu.
-\newblock Wavenet: A generative model for raw audio.
-\newblock {\em arXiv preprint arXiv:1609.03499}, 2016.
-
-\bibitem{ordonez2016deep}
-Francisco~Javier Ord{\'o}{\~n}ez and Daniel Roggen.
-\newblock Deep convolutional and lstm recurrent neural networks for multimodal
-  wearable activity recognition.
-\newblock {\em Sensors}, 16(1):115, 2016.
-
-\bibitem{pan2010survey}
-Sinno~Jialin Pan and Qiang Yang.
-\newblock A survey on transfer learning.
-\newblock {\em IEEE Transactions on Knowledge and Data Engineering},
-  22(10):1345--1359, 2010.
-
-\bibitem{rajpurkar2022ai}
-Pranav Rajpurkar, Emma Chen, Oishi Banerjee, and Eric~J Topol.
-\newblock Ai in health and medicine.
-\newblock {\em Nature Medicine}, 28(1):31--38, 2022.
-
-\bibitem{roy2024fewshot}
-Shuvojit Roy, Saikat Mondal, Sukanya Das, and Shan E~Ahmed Raza.
-\newblock Few-shot learning for medical image segmentation: A review and
-  comparative study.
-\newblock {\em ACM Computing Surveys}, 57(4):1--38, 2024.
-
-\bibitem{senyurek2020cnn}
-Volkan~Y Senyurek, Masudul~H Imtiaz, Prajakta Belsare, Stephen Tiffany, and
-  Edward Sazonov.
-\newblock A cnn-lstm neural network for recognition of puffing in smoking
-  episodes using wearable sensors.
-\newblock {\em Biomedical Engineering Letters}, 10(2):195--203, 2020.
-
-\bibitem{shah2023emergence}
-Syed Agha~Hassnain Shah, Ahmad Tahir, Rafia Hafiz, Habib Nasir, Usman Bashir,
-  and Qammer~H Abbasi.
-\newblock The emergence of ai-based wearable sensors for digital health
-  technology: A review.
-\newblock {\em Sensors}, 23(23):9498, 2023.
-
-\bibitem{dilated_attention_2021}
-Yuan Shen, JoonOh Lee, Hyeji Jang, Taejune Kang, and Sanghoon Lee.
-\newblock Dilated causal convolution with multi-head self attention for sensor
-  human activity recognition.
-\newblock {\em Neural Computing and Applications}, 33:14871--14883, 2021.
-
-\bibitem{singh2024hybrid}
-Puneet Singh, Amandeep Kaur, Rinkle Bhatia, Sukhchandan Gill, and Anu Kaur.
-\newblock Hybrid deep learning model for wearable sensor‐based stress
-  recognition for internet of medical things (iomt) system.
-\newblock {\em International Journal of Communication Systems}, 37(5):e5657,
-  2024.
-
-\bibitem{topol2019high}
-Eric~J Topol.
-\newblock High-performance medicine: the convergence of human and artificial
-  intelligence.
-\newblock {\em Nature Medicine}, 25(1):44--56, 2019.
-
-\bibitem{wang2019deep_HAR}
-Jianbo Wang, Yuntao Chen, Shuochao Hao, Xiaofan Peng, and Lisha Hu.
-\newblock Deep learning for sensor-based activity recognition: A survey.
-\newblock {\em Pattern Recognition Letters}, 119:3--11, 2019.
-
-\bibitem{wang2022deep}
-Jingyuan Wang, Yang Chen, Shuheng Hao, Xingjuan Peng, and Lisheng Hu.
-\newblock Deep learning in human activity recognition with wearable sensors: A
-  review on advances.
-\newblock {\em Sensors}, 22(4):1476, 2022.
-
-\bibitem{weiss2016survey}
-Karl Weiss, Taghi~M Khoshgoftaar, and DingDing Wang.
-\newblock A survey of transfer learning.
-\newblock {\em Journal of Big Data}, 3(1):1--40, 2016.
-
-\bibitem{jmir2024sensors}
-Mengdi Wu, Eric~L Rosenthal, Artur Kechter, Yu~Shi, Cho-Hee Yang, and
-  Genevieve~F Dunton.
-\newblock Sensors for smoking detection in epidemiological research: Scoping
-  review.
-\newblock {\em JMIR mHealth and uHealth}, 12:e52171, 2024.
-
-\bibitem{yang2022jitai}
-Min-Jeong Yang, Camille Nebeker, Jana Hirsch, Linda~C Gallo, Marta Moreno,
-  Donald~J Slymen, Benjamin~L Smarr, and Kevin Patrick.
-\newblock A just-in-time adaptive intervention (jitai) for smoking cessation:
-  Feasibility and acceptability findings.
-\newblock {\em Addictive Behaviors}, 133:107401, 2022.
-
-\bibitem{zhang2022deep_har}
-S~Zhang, Y~Li, S~Zhang, F~Shahabi, S~Xia, Y~Deng, and N~Alshurafa.
-\newblock Deep learning in human activity recognition with wearable sensors: A
-  review on advances.
-\newblock {\em Sensors}, 22(4):1476, 2022.
-
-\bibitem{mobile2023interventions}
-Jiawen Zhao, Becky Freeman, and Mu~Li.
-\newblock Mobile phone-based interventions for smoking cessation among young
-  people: Systematic review and meta-analysis.
-\newblock {\em JMIR mHealth and uHealth}, 11:e43922, 2023.
+\bibitem{finn2017model}
+C.~Finn, P.~Abbeel, and S.~Levine.
+\newblock Model-agnostic meta-learning for fast adaptation of deep networks.
+\newblock In {\em Proceedings of the 34th International Conference on Machine
+  Learning}, pages 1126--1135, 2017.
 
 \end{thebibliography}
