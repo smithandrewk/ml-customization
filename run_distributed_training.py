@@ -67,6 +67,23 @@ class JobResult:
     success: bool
 
 
+def is_localhost_server(server: str) -> bool:
+    """Check if a server string refers to localhost."""
+    import socket
+    local_hostname = socket.gethostname()
+    local_fqdn = socket.getfqdn()
+
+    localhost_names = [
+        'localhost',
+        '127.0.0.1',
+        '::1',
+        local_hostname,
+        local_fqdn,
+    ]
+
+    return server.lower() in [name.lower() for name in localhost_names]
+
+
 class GPUWorker(threading.Thread):
     """Worker thread that processes jobs on a specific GPU."""
 
@@ -82,6 +99,10 @@ class GPUWorker(threading.Thread):
         self.tmux_pane = tmux_pane
         self.verbose = verbose
         self.daemon = True
+
+    def is_localhost(self) -> bool:
+        """Check if this GPU is on the localhost/main node."""
+        return is_localhost_server(self.gpu.server)
 
     def run(self):
         """Process jobs from the queue."""
@@ -146,13 +167,24 @@ class GPUWorker(threading.Thread):
             print(f"[{self.gpu}] DEBUG: Job exit code: {returncode}")
 
         if returncode == 0:
-            if self.verbose:
-                print(f"[{self.gpu}] Job succeeded, copying results back to main node...")
-            experiment_path = self.copy_results_to_host(job_config)
-            if experiment_path and self.verbose:
-                print(f"[{self.gpu}] ✓ Results copied successfully to {experiment_path}")
-            elif self.verbose:
-                print(f"[{self.gpu}] ⚠ Failed to copy results (directory may not exist)")
+            # Check if this is localhost - if so, skip copying
+            if self.is_localhost():
+                if self.verbose:
+                    print(f"[{self.gpu}] Job ran on localhost, results already on main node")
+                # Just return the experiment path without copying
+                prefix = job_config.get('prefix', 'alpha')
+                fold = job_config['fold']
+                participants = job_config.get('participants', ['tonmoy', 'asfik', 'ejaz'])
+                target_participant = participants[fold]
+                experiment_path = f"experiments/{prefix}/fold{fold}_{target_participant}"
+            else:
+                if self.verbose:
+                    print(f"[{self.gpu}] Job succeeded, copying results back to main node...")
+                experiment_path = self.copy_results_to_host(job_config)
+                if experiment_path and self.verbose:
+                    print(f"[{self.gpu}] ✓ Results copied successfully to {experiment_path}")
+                elif self.verbose:
+                    print(f"[{self.gpu}] ⚠ Failed to copy results (directory may not exist)")
         else:
             if self.verbose:
                 print(f"[{self.gpu}] Job failed with exit code {returncode}, skipping copy")
@@ -259,29 +291,51 @@ class GPUWorker(threading.Thread):
             os.makedirs(f"experiments/{prefix}", exist_ok=True)
 
             # Copy files
+            if self.verbose:
+                print(f"[{self.gpu}] DEBUG: Running scp: {' '.join(scp_cmd)}")
+
             result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=300)
 
+            if self.verbose:
+                print(f"[{self.gpu}] DEBUG: SCP return code: {result.returncode}")
+                if result.stdout:
+                    print(f"[{self.gpu}] DEBUG: SCP stdout: {result.stdout}")
+                if result.stderr:
+                    print(f"[{self.gpu}] DEBUG: SCP stderr: {result.stderr}")
+
             if result.returncode == 0:
-                # Delete from remote machine
+                # Delete fold directory from remote machine and clean up parent if empty
                 ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no"]
                 if self.gpu.port != 22:
                     ssh_cmd.extend(["-p", str(self.gpu.port)])
                 if self.gpu.ssh_key:
                     ssh_cmd.extend(["-i", self.gpu.ssh_key])
                 ssh_cmd.append(host_string)
-                ssh_cmd.append(f"rm -rf {remote_exp_dir}")
+                # Delete the fold directory and clean up parent experiment dir if empty
+                cleanup_cmd = f"rm -rf {remote_exp_dir} && rmdir ~/ml-customization/experiments/{prefix} 2>/dev/null || true"
+                ssh_cmd.append(cleanup_cmd)
 
-                subprocess.run(ssh_cmd, capture_output=True, timeout=30)
+                if self.verbose:
+                    print(f"[{self.gpu}] Cleaning up remote directories...")
+
+                cleanup_result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=30)
+
+                if self.verbose:
+                    if cleanup_result.returncode == 0:
+                        print(f"[{self.gpu}] ✓ Remote cleanup complete")
+                    else:
+                        print(f"[{self.gpu}] ⚠ Remote cleanup had issues (may be normal if other folds remain)")
 
                 return local_exp_dir
             else:
                 if self.verbose:
-                    print(f"[{self.gpu}] Warning: Failed to copy results: {result.stderr}")
+                    print(f"[{self.gpu}] ✗ Failed to copy results")
+                    print(f"[{self.gpu}] SCP error: {result.stderr}")
                 return None
 
         except Exception as e:
             if self.verbose:
-                print(f"[{self.gpu}] Warning: Error copying results: {e}")
+                print(f"[{self.gpu}] ✗ Error copying results: {e}")
             return None
 
     def build_training_command(self, script_path: str, fold: int, device: int,
@@ -341,7 +395,54 @@ class GPUWorker(threading.Thread):
         return cmd
 
     def run_ssh_command(self, command: str, marker_file: str) -> tuple:
-        """Execute command in tmux pane on remote host via SSH."""
+        """Execute command in tmux pane on remote host via SSH (or locally if localhost)."""
+
+        # If localhost, run directly without SSH
+        if self.is_localhost():
+            tmux_cmd = (
+                f"rm -f {marker_file} && "
+                f"tmux send-keys -t {self.tmux_session}.{self.tmux_pane} '{command}' C-m && "
+                f"while [ ! -f {marker_file} ]; do sleep 2; done"
+            )
+
+            # Execute locally using bash
+            local_cmd = ["bash", "-c", tmux_cmd]
+
+            try:
+                result = subprocess.run(
+                    local_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=7200  # 2 hour timeout per job
+                )
+
+                # Capture output from tmux pane buffer
+                capture_cmd = ["tmux", "capture-pane", "-t", f"{self.tmux_session}.{self.tmux_pane}", "-p"]
+                capture_result = subprocess.run(
+                    capture_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=30
+                )
+
+                stdout = capture_result.stdout if capture_result.returncode == 0 else result.stdout
+
+                # Read exit code from marker file
+                try:
+                    with open(marker_file, 'r') as f:
+                        job_exit_code = int(f.read().strip())
+                except:
+                    job_exit_code = 1
+
+                return job_exit_code, stdout, result.stderr
+            except subprocess.TimeoutExpired:
+                return -1, "", "Job timeout (2 hours exceeded)"
+            except Exception as e:
+                return -1, "", str(e)
+
+        # Remote execution via SSH
         ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no"]
 
         if self.gpu.port != 22:
@@ -442,14 +543,6 @@ def setup_tmux_sessions(gpus: List[GPU], session_name: str = "ml_training") -> D
         # Get first GPU for SSH connection details
         first_gpu = server_gpus[0]
 
-        # Build SSH command
-        ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no"]
-        if first_gpu.port != 22:
-            ssh_cmd.extend(["-p", str(first_gpu.port)])
-        if first_gpu.ssh_key:
-            ssh_cmd.extend(["-i", first_gpu.ssh_key])
-        ssh_cmd.append(server_key)
-
         # Kill existing session if it exists, then create new one
         setup_cmd = f"tmux kill-session -t {session_name} 2>/dev/null; tmux new-session -d -s {session_name}"
 
@@ -460,22 +553,41 @@ def setup_tmux_sessions(gpus: List[GPU], session_name: str = "ml_training") -> D
         # Select even-vertical layout for clean pane arrangement
         setup_cmd += f" && tmux select-layout -t {session_name} even-vertical"
 
-        # Execute setup
-        ssh_cmd.append(setup_cmd)
-
-        try:
-            result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=10)
-            if result.returncode == 0:
-                print(f"✓ Created tmux session '{session_name}' on {server_key} with {len(server_gpus)} panes")
-
-                # Map device IDs to pane indices
-                pane_mapping[first_gpu.server] = {gpu.device_id: i for i, gpu in enumerate(server_gpus)}
-            else:
-                print(f"✗ Failed to create tmux session on {server_key}: {result.stderr}")
+        # Check if this is localhost
+        if is_localhost_server(first_gpu.server):
+            # Run locally without SSH
+            try:
+                result = subprocess.run(["bash", "-c", setup_cmd], capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    print(f"✓ Created tmux session '{session_name}' on localhost with {len(server_gpus)} panes")
+                    pane_mapping[first_gpu.server] = {gpu.device_id: i for i, gpu in enumerate(server_gpus)}
+                else:
+                    print(f"✗ Failed to create tmux session on localhost: {result.stderr}")
+                    pane_mapping[first_gpu.server] = {}
+            except Exception as e:
+                print(f"✗ Error setting up tmux on localhost: {e}")
                 pane_mapping[first_gpu.server] = {}
-        except Exception as e:
-            print(f"✗ Error setting up tmux on {server_key}: {e}")
-            pane_mapping[first_gpu.server] = {}
+        else:
+            # Run via SSH for remote servers
+            ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no"]
+            if first_gpu.port != 22:
+                ssh_cmd.extend(["-p", str(first_gpu.port)])
+            if first_gpu.ssh_key:
+                ssh_cmd.extend(["-i", first_gpu.ssh_key])
+            ssh_cmd.append(server_key)
+            ssh_cmd.append(setup_cmd)
+
+            try:
+                result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                    print(f"✓ Created tmux session '{session_name}' on {server_key} with {len(server_gpus)} panes")
+                    pane_mapping[first_gpu.server] = {gpu.device_id: i for i, gpu in enumerate(server_gpus)}
+                else:
+                    print(f"✗ Failed to create tmux session on {server_key}: {result.stderr}")
+                    pane_mapping[first_gpu.server] = {}
+            except Exception as e:
+                print(f"✗ Error setting up tmux on {server_key}: {e}")
+                pane_mapping[first_gpu.server] = {}
 
     return pane_mapping
 

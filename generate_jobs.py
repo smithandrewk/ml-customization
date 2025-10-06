@@ -17,18 +17,17 @@ from datetime import datetime
 GRID_PARAMS = {
     'batch_size': [32],
     'lr': [3e-4],
-    'early_stopping_patience': [5],
-    'mode': ['target_only_fine_tuning'],
+    'early_stopping_patience': [50],
+    'mode': ['full_fine_tuning','target_only','target_only_fine_tuning'],
     'target_data_pct': [0.01, 0.05, 0.125, 0.25, 0.5, 1.0],
-    'n_base_participants': [2],
+    'n_base_participants': [6],
 }
 
 # Fixed parameters
 FIXED_PARAMS = {
     'model': 'test',
     'data_path': 'data/001_60s_window',
-    'participants': ['tonmoy', 'asfik', 'alsaad'],
-    # 'participants': ['tonmoy', 'asfik', 'alsaad', 'anam', 'ejaz', 'iftakhar', 'unk1'],
+    'participants': ['tonmoy', 'asfik', 'alsaad', 'anam', 'ejaz', 'iftakhar', 'unk1'],
     'window_size': 3000,
     'use_augmentation': True,
     'early_stopping_patience_target': 50,

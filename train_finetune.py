@@ -143,10 +143,6 @@ def main():
         target_train_dataset = random_subsample(target_train_dataset, target_data_pct)
         print(f'Target train dataset size after subsampling: {len(target_train_dataset)}')
 
-    print(f'Target val dataset size: {len(target_val_dataset)}')
-    target_val_dataset = random_subsample(target_val_dataset, .1)
-    print(f'Target val dataset size after subsampling: {len(target_val_dataset)}')
-
     # Prepare training data based on mode
     if mode == 'full_fine_tuning':
         # Load base participant data and concatenate with target

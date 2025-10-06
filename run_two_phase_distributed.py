@@ -180,6 +180,74 @@ def sync_base_models_to_cluster(cluster_config_path: str, verbose: bool = True) 
     return fail_count == 0
 
 
+def calculate_time_saved(base_log_path: str, finetune_jobs_path: str) -> str:
+    """
+    Calculate time saved by sharing base models.
+
+    Returns formatted string showing time savings, or None if calculation fails.
+    """
+    try:
+        # Load base training log
+        with open(base_log_path, 'r') as f:
+            base_log = json.load(f)
+
+        # Load fine-tuning jobs to count reuse
+        with open(finetune_jobs_path, 'r') as f:
+            finetune_jobs = json.load(f)
+
+        # Map base model prefix to training duration
+        base_model_durations = {}
+        for result in base_log['results']:
+            if result['success']:
+                prefix = result['config']['prefix']
+                duration = result['duration_seconds']
+                base_model_durations[prefix] = duration
+
+        # Count how many fine-tuning jobs use each base model (exclude target_only)
+        base_model_usage = {}
+        for job in finetune_jobs:
+            base_prefix = job.get('base_experiment_prefix')
+            if base_prefix:  # Skip target_only jobs (base_experiment_prefix is None)
+                if base_prefix not in base_model_usage:
+                    base_model_usage[base_prefix] = 0
+                base_model_usage[base_prefix] += 1
+
+        # Calculate time saved for each base model
+        total_time_saved = 0
+        savings_breakdown = []
+
+        for base_prefix, num_reuses in sorted(base_model_usage.items()):
+            if base_prefix in base_model_durations:
+                duration = base_model_durations[base_prefix]
+                # Time saved = (num_reuses - 1) × base_model_duration
+                # We subtract 1 because we still train the base model once
+                time_saved = (num_reuses - 1) * duration
+                total_time_saved += time_saved
+
+                savings_breakdown.append(
+                    f"  {base_prefix}:\n"
+                    f"    Base model training time: {duration:.1f}s ({duration/60:.1f}min)\n"
+                    f"    Used by {num_reuses} fine-tuning jobs\n"
+                    f"    Time saved: {time_saved:.1f}s ({time_saved/60:.1f}min) "
+                    f"[= {num_reuses-1} × {duration:.1f}s]"
+                )
+
+        # Format output
+        if not savings_breakdown:
+            return None
+
+        output = "\n".join(savings_breakdown)
+        output += f"\n\n  TOTAL TIME SAVED: {total_time_saved:.1f}s ({total_time_saved/60:.1f}min)"
+        output += f"\n\n  💡 Without shared base models, you would have spent an additional"
+        output += f"\n     {total_time_saved/60:.1f} minutes training the same base models repeatedly!"
+
+        return output
+
+    except Exception as e:
+        print(f"Warning: Could not calculate time saved: {e}")
+        return None
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Two-phase distributed training orchestrator",
@@ -352,6 +420,16 @@ Workflow:
     print(f"Start time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"End time: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"Total wall time: {total_duration:.1f}s ({total_duration/60:.1f}min)")
+
+    # Calculate and display time saved by two-phase approach
+    if not args.skip_base_training and os.path.exists('base_training_log.json'):
+        time_saved = calculate_time_saved('base_training_log.json', finetune_jobs_path)
+        if time_saved is not None:
+            print(f"\n{'='*80}")
+            print(f"Time Saved by Shared Base Models")
+            print(f"{'='*80}")
+            print(time_saved)
+
     print(f"\nLogs saved:")
     if not args.skip_base_training:
         print(f"  - base_training_log.json")
