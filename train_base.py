@@ -22,12 +22,13 @@ def compute_base_model_hash(config):
     """
     Compute hash from base model configuration.
 
-    Only includes parameters that affect base model training,
-    excludes fine-tuning parameters like mode, target_data_pct, etc.
+    Includes fold because each fold trains on different base participants
+    (fold 0 excludes participant 0, fold 1 excludes participant 1, etc.)
+    so they are fundamentally different models.
     """
     # Parameters that define a unique base model
     base_config = {
-        'fold': config['fold'],
+        'fold': config['fold'],  # Different folds = different base models
         'n_base_participants': config['n_base_participants'],
         'model': config['model'],
         'data_path': config['data_path'],

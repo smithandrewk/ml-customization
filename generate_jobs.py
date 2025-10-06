@@ -42,12 +42,13 @@ def compute_base_model_hash(config):
     """
     Compute hash from base model configuration.
 
-    Only includes parameters that affect base model training,
-    excludes fine-tuning parameters like mode, target_data_pct, etc.
+    Includes fold because each fold trains on different base participants
+    (fold 0 excludes participant 0, fold 1 excludes participant 1, etc.)
+    so they are fundamentally different models.
     """
     # Parameters that define a unique base model
     base_config = {
-        'fold': config['fold'],
+        'fold': config['fold'],  # Different folds = different base models
         'n_base_participants': config['n_base_participants'],
         'model': config['model'],
         'data_path': config['data_path'],
@@ -67,6 +68,36 @@ def compute_base_model_hash(config):
 
     # Create deterministic string representation
     config_str = json.dumps(base_config, sort_keys=True)
+    return hashlib.sha256(config_str.encode()).hexdigest()[:16]
+
+
+def compute_finetune_experiment_hash(config):
+    """
+    Compute hash for fine-tuning experiment directory.
+
+    Excludes fold and base model reference so all folds with same
+    fine-tuning hyperparameters share one experiment directory.
+    """
+    finetune_config = {
+        'mode': config['mode'],
+        'target_data_pct': config['target_data_pct'],
+        'n_base_participants': config['n_base_participants'],
+        'model': config['model'],
+        'data_path': config['data_path'],
+        'window_size': config['window_size'],
+        'batch_size': config['batch_size'],
+        'lr': config['lr'],
+        'early_stopping_patience_target': config['early_stopping_patience_target'],
+        'use_augmentation': config['use_augmentation'],
+        'participants': config['participants'],
+    }
+
+    if config['use_augmentation']:
+        finetune_config['jitter_std'] = config.get('jitter_std', 0.005)
+        finetune_config['magnitude_range'] = config.get('magnitude_range', [0.98, 1.02])
+        finetune_config['aug_prob'] = config.get('aug_prob', 0.3)
+
+    config_str = json.dumps(finetune_config, sort_keys=True)
     return hashlib.sha256(config_str.encode()).hexdigest()[:16]
 
 
@@ -207,15 +238,21 @@ def generate_two_phase_jobs():
     # Jobs that need base models
     for config in configs_needing_base:
         base_hash = compute_base_model_hash(config)
+        finetune_hash = compute_finetune_experiment_hash(config)
         finetune_job = config.copy()
-        # Use base_experiment_prefix instead of base_model_hash to match train_finetune.py
+        # Set prefix based on fine-tuning config (all folds share same experiment dir)
+        finetune_job['prefix'] = f'finetune_{finetune_hash}'
+        # Store base model location for loading
         finetune_job['base_experiment_prefix'] = f'base_{base_hash}'
         finetune_job['device'] = 0  # Will be set by distributed training system
         finetune_jobs.append(finetune_job)
 
     # Jobs that don't need base models (target_only)
     for config in configs_no_base:
+        finetune_hash = compute_finetune_experiment_hash(config)
         finetune_job = config.copy()
+        # Set prefix based on fine-tuning config
+        finetune_job['prefix'] = f'target_only_{finetune_hash}'
         finetune_job['base_experiment_prefix'] = None  # No base model needed
         finetune_job['device'] = 0  # Will be set by distributed training system
         finetune_jobs.append(finetune_job)
