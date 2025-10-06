@@ -2,8 +2,8 @@
 """
 Two-phase distributed training orchestrator.
 
-Phase 1: Train all unique base models across cluster
-Phase 2: Sync base models to all nodes, then fine-tune in parallel
+Phase 1: Train all unique base models across cluster (saved to experiments/base_{hash}/)
+Phase 2: Sync base model experiments to all nodes, then fine-tune in parallel
 
 This wrapper coordinates the entire two-phase workflow automatically.
 """
@@ -64,7 +64,7 @@ def run_command(cmd: List[str], description: str, timeout: int = None) -> tuple:
 
 def sync_base_models_to_cluster(cluster_config_path: str, verbose: bool = True) -> bool:
     """
-    Sync the base_models directory to all cluster nodes.
+    Sync base model experiment directories to all cluster nodes.
 
     Args:
         cluster_config_path: Path to cluster configuration JSON
@@ -73,18 +73,24 @@ def sync_base_models_to_cluster(cluster_config_path: str, verbose: bool = True) 
     Returns:
         True if all syncs succeeded, False otherwise
     """
-    # Check if base_models directory exists
-    if not os.path.exists('base_models'):
-        print("✗ base_models directory not found. Nothing to sync.")
+    # Check if experiments directory exists and find base model directories
+    if not os.path.exists('experiments'):
+        print("✗ experiments directory not found. Nothing to sync.")
         return False
 
-    # Count models
-    model_files = [f for f in os.listdir('base_models') if f.endswith('.pt')]
+    # Find all base model experiment directories (start with "base_")
+    base_exp_dirs = [d for d in os.listdir('experiments') if d.startswith('base_') and os.path.isdir(f'experiments/{d}')]
+
+    if not base_exp_dirs:
+        print("✗ No base model experiments found in experiments/ directory. Nothing to sync.")
+        return False
+
     print(f"\n{'='*80}")
-    print(f"Syncing Base Models to Cluster")
+    print(f"Syncing Base Model Experiments to Cluster")
     print(f"{'='*80}")
-    print(f"Found {len(model_files)} base models to sync")
-    print(f"Directory: {os.path.abspath('base_models')}")
+    print(f"Found {len(base_exp_dirs)} base model experiments to sync:")
+    for exp_dir in base_exp_dirs:
+        print(f"  - {exp_dir}")
     print(f"{'='*80}\n")
 
     # Load cluster configuration
@@ -108,13 +114,13 @@ def sync_base_models_to_cluster(cluster_config_path: str, verbose: bool = True) 
         if server.get('ssh_key'):
             ssh_opts.extend(["-i", server['ssh_key']])
 
-        # First, create base_models directory on remote if it doesn't exist
-        ssh_cmd = ["ssh"] + ssh_opts + [host_string, "mkdir -p ~/ml-customization/base_models"]
+        # First, create experiments directory on remote if it doesn't exist
+        ssh_cmd = ["ssh"] + ssh_opts + [host_string, "mkdir -p ~/ml-customization/experiments"]
 
         try:
             result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=10)
             if result.returncode != 0:
-                print(f"[{host_string}] ✗ Failed to create base_models directory")
+                print(f"[{host_string}] ✗ Failed to create experiments directory")
                 fail_count += 1
                 continue
         except Exception as e:
@@ -122,41 +128,45 @@ def sync_base_models_to_cluster(cluster_config_path: str, verbose: bool = True) 
             fail_count += 1
             continue
 
-        # Sync base_models directory using rsync for efficiency
-        # Build rsync command with SSH options
-        ssh_command = f"ssh {' '.join(ssh_opts)}"
-        rsync_cmd = [
-            "rsync",
-            "-avz",
-            "--progress",
-            "-e", ssh_command,
-            "base_models/",
-            f"{host_string}:~/ml-customization/base_models/"
-        ]
+        # Sync each base model experiment directory using rsync for efficiency
+        server_success = True
+        for exp_dir in base_exp_dirs:
+            # Build rsync command with SSH options
+            ssh_command = f"ssh {' '.join(ssh_opts)}"
+            rsync_cmd = [
+                "rsync",
+                "-avz",
+                "--progress",
+                "-e", ssh_command,
+                f"experiments/{exp_dir}/",
+                f"{host_string}:~/ml-customization/experiments/{exp_dir}/"
+            ]
 
-        if verbose:
-            print(f"[{host_string}] Running: {' '.join(rsync_cmd)}")
+            if verbose:
+                print(f"[{host_string}] Syncing {exp_dir}...")
 
-        try:
-            result = subprocess.run(
-                rsync_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                timeout=300  # 5 minute timeout
-            )
+            try:
+                result = subprocess.run(
+                    rsync_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=300  # 5 minute timeout
+                )
 
-            if result.returncode == 0:
-                print(f"[{host_string}] ✓ Base models synced successfully")
-                if verbose and result.stdout:
-                    print(f"[{host_string}] {result.stdout.strip()}")
-                success_count += 1
-            else:
-                print(f"[{host_string}] ✗ Rsync failed: {result.stderr}")
-                fail_count += 1
+                if result.returncode == 0:
+                    print(f"[{host_string}] ✓ {exp_dir} synced successfully")
+                else:
+                    print(f"[{host_string}] ✗ Rsync failed for {exp_dir}: {result.stderr}")
+                    server_success = False
 
-        except Exception as e:
-            print(f"[{host_string}] ✗ Error during rsync: {e}")
+            except Exception as e:
+                print(f"[{host_string}] ✗ Error during rsync for {exp_dir}: {e}")
+                server_success = False
+
+        if server_success:
+            success_count += 1
+        else:
             fail_count += 1
 
     # Print summary
@@ -192,12 +202,12 @@ Example usage:
 Workflow:
   1. Train all unique base models across cluster
   2. Wait for completion
-  3. Sync base_models/ directory to all nodes
+  3. Sync base model experiments to all nodes
   4. Train all fine-tuning experiments in parallel
         """
     )
 
-    parser.add_argument('--cluster-config', required=True,
+    parser.add_argument('--cluster-config', required=False, default='cluster_config.json',
                        help='Path to cluster configuration JSON')
     parser.add_argument('--base-jobs',
                        help='Path to base training jobs JSON (default: base_training_jobs.json)')

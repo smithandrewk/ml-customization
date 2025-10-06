@@ -192,27 +192,31 @@ def generate_two_phase_jobs():
             base_job['magnitude_range'] = reference_config['magnitude_range']
             base_job['aug_prob'] = reference_config['aug_prob']
 
+        # Set prefix to base_{hash} so experiment directory is predictable
+        base_job['prefix'] = f'base_{base_hash}'
+
         # Add hash for tracking
         base_job['_base_model_hash'] = base_hash
         base_job['_num_dependent_jobs'] = len(configs)
 
         base_jobs.append(base_job)
 
-    # Generate fine-tuning jobs (all original configs, with base_model_hash added where needed)
+    # Generate fine-tuning jobs (all original configs, with base_experiment_prefix added where needed)
     finetune_jobs = []
 
     # Jobs that need base models
     for config in configs_needing_base:
         base_hash = compute_base_model_hash(config)
         finetune_job = config.copy()
-        finetune_job['base_model_hash'] = base_hash
+        # Use base_experiment_prefix instead of base_model_hash to match train_finetune.py
+        finetune_job['base_experiment_prefix'] = f'base_{base_hash}'
         finetune_job['device'] = 0  # Will be set by distributed training system
         finetune_jobs.append(finetune_job)
 
     # Jobs that don't need base models (target_only)
     for config in configs_no_base:
         finetune_job = config.copy()
-        finetune_job['base_model_hash'] = None  # No base model needed
+        finetune_job['base_experiment_prefix'] = None  # No base model needed
         finetune_job['device'] = 0  # Will be set by distributed training system
         finetune_jobs.append(finetune_job)
 
@@ -247,8 +251,9 @@ def main():
     print("Example: Jobs sharing the same base model")
     if base_jobs:
         example_hash = base_jobs[0]['_base_model_hash']
-        example_jobs = [j for j in finetune_jobs if j['base_model_hash'] == example_hash]
-        print(f"Base model hash: {example_hash}")
+        example_prefix = f'base_{example_hash}'
+        example_jobs = [j for j in finetune_jobs if j.get('base_experiment_prefix') == example_prefix]
+        print(f"Base experiment prefix: {example_prefix}")
         print(f"Number of fine-tuning jobs using this base: {len(example_jobs)}")
         print(f"Fold: {base_jobs[0]['fold']}")
         print(f"Base participants (n={base_jobs[0]['n_base_participants']})")

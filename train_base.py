@@ -67,6 +67,7 @@ def main():
     device = hyperparameters['device']
     batch_size = hyperparameters['batch_size']
     data_path = hyperparameters['data_path']
+    experiment_prefix = hyperparameters['prefix']
     participants = hyperparameters['participants'].copy()  # Copy to avoid modifying original
 
     # Determine target participant and base participants
@@ -86,21 +87,21 @@ def main():
     if len(participants) == 0:
         raise ValueError(f"No base participants available for fold {fold}. Cannot train base model.")
 
+    # Compute base model hash for reference (saved in metadata)
+    base_model_hash = compute_base_model_hash(hyperparameters)
+
     print(f"\n{'='*80}")
     print(f"Base Model Training")
     print(f"{'='*80}")
+    print(f"Experiment prefix: {experiment_prefix}")
     print(f"Target participant (excluded): {target_participant}")
     print(f"Base participants: {participants}")
     print(f"Number of base participants: {len(participants)}")
-
-    # Compute base model hash
-    base_model_hash = compute_base_model_hash(hyperparameters)
     print(f"Base model hash: {base_model_hash}")
     print(f"{'='*80}\n")
 
-    # Create experiment directory with hash as prefix
-    exp_prefix = f"base_{base_model_hash}"
-    new_exp_dir = f'experiments/{exp_prefix}/fold{fold}_{target_participant}'
+    # Create experiment directory using the prefix from job config
+    new_exp_dir = f'experiments/{experiment_prefix}/fold{fold}_{target_participant}'
 
     if os.path.exists(new_exp_dir):
         print(f"Base model experiment already exists at {new_exp_dir}")

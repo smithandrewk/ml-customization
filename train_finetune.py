@@ -21,8 +21,8 @@ def main():
     # Parse arguments
     argparser = argparse.ArgumentParser(description='Fine-tune base model on target participant')
     argparser = add_arguments(argparser)
-    argparser.add_argument('--base_model_hash', type=str, required=False, default=None,
-                          help='Hash of the base model to load (not needed for target_only mode)')
+    argparser.add_argument('--base_experiment_prefix', type=str, required=False, default=None,
+                          help='Prefix of the base experiment to load from (not needed for target_only mode)')
     args = argparser.parse_args()
 
     # Check that data_path exists
@@ -37,7 +37,7 @@ def main():
     batch_size = hyperparameters['batch_size']
     data_path = hyperparameters['data_path']
     experiment_prefix = hyperparameters['prefix']
-    base_model_hash = hyperparameters.get('base_model_hash')
+    base_experiment_prefix = hyperparameters.get('base_experiment_prefix')
     mode = hyperparameters['mode']
     target_data_pct = hyperparameters['target_data_pct']
 
@@ -72,13 +72,13 @@ def main():
 
     else:
         # Other modes require a base model
-        if not base_model_hash:
-            raise ValueError(f"Mode '{mode}' requires --base_model_hash parameter")
+        if not base_experiment_prefix:
+            raise ValueError(f"Mode '{mode}' requires --base_experiment_prefix parameter")
 
         print(f"\n{'='*80}")
         print(f"Fine-Tuning from Base Model")
         print(f"{'='*80}")
-        print(f"Base model hash: {base_model_hash}")
+        print(f"Base experiment prefix: {base_experiment_prefix}")
         print(f"Target participant: {target_participant}")
         print(f"Mode: {mode}")
         print(f"Target data percentage: {target_data_pct}")
@@ -86,7 +86,7 @@ def main():
         print(f"{'='*80}\n")
 
         # Load base model from experiments directory
-        base_exp_dir = f'experiments/base_{base_model_hash}/fold{fold}_{target_participant}'
+        base_exp_dir = f'experiments/{base_experiment_prefix}/fold{fold}_{target_participant}'
         base_model_path = f'{base_exp_dir}/best_base_model.pt'
         metadata_path = f'{base_exp_dir}/metrics.json'
 
@@ -183,7 +183,7 @@ def main():
 
     # Training metrics
     metrics = {
-        'base_model_hash': base_model_hash,
+        'base_experiment_prefix': base_experiment_prefix,
         'best_val_loss': None,
         'best_val_loss_epoch': None,
         'best_val_f1': None,

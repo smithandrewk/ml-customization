@@ -118,7 +118,7 @@ if participants:
     print(f'Base train dataset size: {len(base_train_dataset)}')
 
     print(f'Base val dataset size: {len(base_val_dataset)}')
-    base_val_dataset = random_subsample(base_val_dataset, .5)
+    base_val_dataset = random_subsample(base_val_dataset, 1)
     print(f'Base val dataset size: {len(base_val_dataset)}')
 
     base_trainloader = DataLoader(base_train_dataset, batch_size=batch_size, shuffle=True)

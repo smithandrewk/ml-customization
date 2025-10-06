@@ -116,9 +116,17 @@ class GPUWorker(threading.Thread):
         job_config['device'] = self.gpu.device_id
 
         # Add config hash to prefix for unique experiment names
+        # Skip if prefix already has a hash-like suffix (e.g., 'base_abc123def456')
         original_prefix = job_config.get('prefix', 'alpha')
-        config_hash = hash_config(job_config)
-        job_config['prefix'] = f"{original_prefix}_{config_hash}"
+
+        # Check if prefix already has a hash (looks like it ends with _{hex_string})
+        import re
+        has_hash = re.search(r'_[a-f0-9]{8,}$', original_prefix)
+
+        if not has_hash:
+            config_hash = hash_config(job_config)
+            job_config['prefix'] = f"{original_prefix}_{config_hash}"
+        # else: prefix already includes hash, use as-is
 
         cmd = self.build_training_command(self.script_path, **job_config)
 
@@ -134,8 +142,20 @@ class GPUWorker(threading.Thread):
 
         # Copy results back to host if job succeeded
         experiment_path = None
+        if self.verbose:
+            print(f"[{self.gpu}] DEBUG: Job exit code: {returncode}")
+
         if returncode == 0:
+            if self.verbose:
+                print(f"[{self.gpu}] Job succeeded, copying results back to main node...")
             experiment_path = self.copy_results_to_host(job_config)
+            if experiment_path and self.verbose:
+                print(f"[{self.gpu}] ✓ Results copied successfully to {experiment_path}")
+            elif self.verbose:
+                print(f"[{self.gpu}] ⚠ Failed to copy results (directory may not exist)")
+        else:
+            if self.verbose:
+                print(f"[{self.gpu}] Job failed with exit code {returncode}, skipping copy")
 
         # Store result
         result = JobResult(
@@ -169,7 +189,6 @@ class GPUWorker(threading.Thread):
             Local path where results were copied, or None if failed
         """
         # Determine the experiment directory path
-        # Note: prefix already has the hash appended in execute_job
         prefix = job_config.get('prefix', 'alpha')
         fold = job_config['fold']
         participants = job_config.get('participants', ['tonmoy', 'asfik', 'ejaz'])
@@ -177,6 +196,13 @@ class GPUWorker(threading.Thread):
 
         remote_exp_dir = f"~/ml-customization/experiments/{prefix}/fold{fold}_{target_participant}"
         local_exp_dir = f"experiments/{prefix}/fold{fold}_{target_participant}"
+
+        if self.verbose:
+            print(f"[{self.gpu}] DEBUG: Attempting to copy")
+            print(f"[{self.gpu}] DEBUG: prefix={prefix}")
+            print(f"[{self.gpu}] DEBUG: fold={fold}, target={target_participant}")
+            print(f"[{self.gpu}] DEBUG: remote={remote_exp_dir}")
+            print(f"[{self.gpu}] DEBUG: local={local_exp_dir}")
 
         # First, verify the directory exists on remote
         ssh_check_cmd = ["ssh", "-o", "StrictHostKeyChecking=no"]
@@ -191,9 +217,23 @@ class GPUWorker(threading.Thread):
 
         try:
             check_result = subprocess.run(ssh_check_cmd, capture_output=True, text=True, timeout=10)
+            if self.verbose:
+                print(f"[{self.gpu}] DEBUG: Directory check result: '{check_result.stdout.strip()}'")
+                print(f"[{self.gpu}] DEBUG: Return code: {check_result.returncode}")
+
             if "missing" in check_result.stdout or check_result.returncode != 0:
                 if self.verbose:
-                    print(f"[{self.gpu}] Warning: Remote directory does not exist: {remote_exp_dir}")
+                    print(f"[{self.gpu}] ✗ Remote directory does not exist: {remote_exp_dir}")
+                    # Try to list what's actually there
+                    list_cmd = ["ssh", "-o", "StrictHostKeyChecking=no"]
+                    if self.gpu.port != 22:
+                        list_cmd.extend(["-p", str(self.gpu.port)])
+                    if self.gpu.ssh_key:
+                        list_cmd.extend(["-i", self.gpu.ssh_key])
+                    list_cmd.append(host_string)
+                    list_cmd.append(f"ls -la ~/ml-customization/experiments/ 2>&1 || echo 'experiments dir does not exist'")
+                    list_result = subprocess.run(list_cmd, capture_output=True, text=True, timeout=10)
+                    print(f"[{self.gpu}] DEBUG: What's in experiments/: {list_result.stdout}")
                 return None
         except Exception as e:
             if self.verbose:
