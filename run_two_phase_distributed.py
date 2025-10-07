@@ -62,6 +62,23 @@ def run_command(cmd: List[str], description: str, timeout: int = None) -> tuple:
         return -1, "", str(e)
 
 
+def is_localhost_server(server: str) -> bool:
+    """Check if a server string refers to localhost."""
+    import socket
+    local_hostname = socket.gethostname()
+    local_fqdn = socket.getfqdn()
+
+    localhost_names = [
+        'localhost',
+        '127.0.0.1',
+        '::1',
+        local_hostname,
+        local_fqdn,
+    ]
+
+    return server.lower() in [name.lower() for name in localhost_names]
+
+
 def sync_base_models_to_cluster(cluster_config_path: str, verbose: bool = True) -> bool:
     """
     Sync base model experiment directories to all cluster nodes.
@@ -103,6 +120,14 @@ def sync_base_models_to_cluster(cluster_config_path: str, verbose: bool = True) 
 
     for server in servers:
         host_string = f"{server.get('user')}@{server['host']}" if server.get('user') else server['host']
+
+        # Skip localhost - experiments are already there
+        if is_localhost_server(server['host']):
+            print(f"\n--- {host_string} (localhost) ---")
+            print(f"[{host_string}] ✓ Skipping sync - experiments already on localhost")
+            success_count += 1
+            continue
+
         print(f"\n--- Syncing to {host_string} ---")
 
         # Build SSH/SCP commands

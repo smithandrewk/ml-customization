@@ -8,11 +8,63 @@ import argparse
 import subprocess
 import json
 import sys
+import socket
 from typing import List, Dict
 
 
+def is_localhost(server: Dict[str, any]) -> bool:
+    """Check if server refers to localhost."""
+    local_hostname = socket.gethostname()
+    local_fqdn = socket.getfqdn()
+
+    localhost_names = [
+        'localhost',
+        '127.0.0.1',
+        '::1',
+        local_hostname,
+        local_fqdn,
+    ]
+
+    return server['host'].lower() in [name.lower() for name in localhost_names]
+
+
 def run_command_on_server(server: Dict[str, any], command: str, verbose: bool = True) -> tuple:
-    """Run a command on a remote server via SSH."""
+    """Run a command on a remote server via SSH (or locally if localhost)."""
+    host_string = f"{server.get('user')}@{server['host']}" if server.get('user') else server['host']
+
+    if verbose:
+        print(f"[{host_string}] Running: {command}")
+
+    # If localhost, run directly without SSH
+    if is_localhost(server):
+        try:
+            result = subprocess.run(
+                ["bash", "-c", command],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=60,
+                cwd=None  # Run in current directory
+            )
+
+            if verbose:
+                if result.stdout:
+                    print(f"[{host_string}] {result.stdout.strip()}")
+                if result.returncode != 0 and result.stderr:
+                    print(f"[{host_string}] Error: {result.stderr.strip()}", file=sys.stderr)
+
+            return result.returncode, result.stdout, result.stderr
+
+        except subprocess.TimeoutExpired:
+            if verbose:
+                print(f"[{host_string}] Command timeout", file=sys.stderr)
+            return -1, "", "Command timeout"
+        except Exception as e:
+            if verbose:
+                print(f"[{host_string}] Error: {e}", file=sys.stderr)
+            return -1, "", str(e)
+
+    # Remote server - use SSH
     ssh_cmd = ["ssh", "-o", "StrictHostKeyChecking=no"]
 
     if server.get('port', 22) != 22:
@@ -21,12 +73,8 @@ def run_command_on_server(server: Dict[str, any], command: str, verbose: bool = 
     if server.get('ssh_key'):
         ssh_cmd.extend(["-i", server['ssh_key']])
 
-    host_string = f"{server.get('user')}@{server['host']}" if server.get('user') else server['host']
     ssh_cmd.append(host_string)
     ssh_cmd.append(command)
-
-    if verbose:
-        print(f"[{host_string}] Running: {command}")
 
     try:
         result = subprocess.run(
@@ -112,7 +160,12 @@ def sync_cluster(cluster_config_path: str, clean_experiments: bool = False,
 
     for server in servers:
         host_string = f"{server.get('user')}@{server['host']}" if server.get('user') else server['host']
-        print(f"\n--- {host_string} ---")
+
+        # Mark localhost for clarity
+        if is_localhost(server):
+            print(f"\n--- {host_string} (localhost) ---")
+        else:
+            print(f"\n--- {host_string} ---")
 
         commands = []
 

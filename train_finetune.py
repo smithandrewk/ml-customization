@@ -47,6 +47,15 @@ def main():
 
     # Create experiment directory
     new_exp_dir = f'experiments/{experiment_prefix}/fold{fold}_{target_participant}'
+
+    # Check if experiment already completed
+    metrics_path = os.path.join(new_exp_dir, 'metrics.json')
+    if os.path.exists(metrics_path):
+        print(f"\n✓ Experiment already completed: {new_exp_dir}")
+        print(f"  Skipping to avoid overwriting results.")
+        print(f"  (Delete the directory to re-run)\n")
+        sys.exit(0)
+
     os.makedirs(new_exp_dir, exist_ok=False)
 
     # Check mode and base_model_hash compatibility
@@ -110,7 +119,7 @@ def main():
         model_type = hyperparameters['model']
         from lib.models import TestModel
         model = TestModel()
-        model.load_state_dict(torch.load(base_model_path))
+        model.load_state_dict(torch.load(base_model_path, map_location='cpu'))
         model.to(device)
 
         print(f'Using model: {model.__class__.__name__}')
@@ -134,8 +143,8 @@ def main():
 
     # Load target participant data
     print("\nLoading target participant data...")
-    target_train_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_train.pt'))
-    target_val_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_val.pt'))
+    target_train_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_train.pt', map_location='cpu'))
+    target_val_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_val.pt', map_location='cpu'))
 
     # Subsample target training data if specified
     if target_data_pct < 1.0:
@@ -155,7 +164,7 @@ def main():
             participants = participants[:n_base]
 
         base_train_dataset = ConcatDataset([
-            TensorDataset(*torch.load(f'{data_path}/{p}_{s}.pt'))
+            TensorDataset(*torch.load(f'{data_path}/{p}_{s}.pt', map_location='cpu'))
             for p in participants
             for s in ['train', 'val']
         ])
@@ -260,12 +269,12 @@ def main():
     # Evaluate on test set
     print("\nEvaluating on test set...")
     target_testloader = DataLoader(
-        TensorDataset(*torch.load(f'{data_path}/{target_participant}_test.pt')),
+        TensorDataset(*torch.load(f'{data_path}/{target_participant}_test.pt', map_location='cpu')),
         batch_size=batch_size
     )
 
     # Load best model and evaluate
-    model.load_state_dict(torch.load(f'{new_exp_dir}/best_model.pt'))
+    model.load_state_dict(torch.load(f'{new_exp_dir}/best_model.pt', map_location='cpu'))
     model.to(device)
     test_loss, test_f1 = compute_loss_and_f1(model, target_testloader, criterion, device=device)
     metrics['test_loss'] = test_loss

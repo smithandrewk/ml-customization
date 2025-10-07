@@ -3,3 +3,5 @@ tqdm
 mysql-connector-python
 numpy
 scikit-learn
+pyyaml
+matplotlib
