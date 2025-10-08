@@ -10,14 +10,7 @@ import argparse
 
 # Failed jobs: (prefix, fold)
 FAILED_JOBS = [
-    ("finetune_0cd2204ea7c1ca8a", 4),  # fold4_ejaz
-    ("finetune_16da73e1e45d3170", 6),  # fold6_unk1
-    ("finetune_1775ba93f2b9bf75", 1),  # fold1_asfik
-    ("finetune_1775ba93f2b9bf75", 4),  # fold4_ejaz
-    ("finetune_1775ba93f2b9bf75", 6),  # fold6_unk1
-    ("finetune_24c53bf385240ec9", 4),  # fold4_ejaz
-    ("finetune_27973c3b012ace93", 6),  # fold6_unk1
-    ("target_only_2e36a01dc507719e", 3),  # fold3_anam
+
 ]
 
 

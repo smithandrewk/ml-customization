@@ -17,17 +17,19 @@ from datetime import datetime
 GRID_PARAMS = {
     'batch_size': [32],
     'lr': [3e-4],
+    'seed': [42, 123, 456],
     'early_stopping_patience': [50],
-    'mode': ['full_fine_tuning','target_only','target_only_fine_tuning'],
-    'target_data_pct': [0.01, 0.05, 0.125, 0.25, 0.5, 1.0],
-    'n_base_participants': [6],
+    'mode': ['target_only'],
+    # 'target_data_pct': [0.01, 0.05, 0.125, 0.25, 0.5, 1.0],
+    'target_data_pct': [1.0],
+    'n_base_participants': [7],
 }
 
 # Fixed parameters
 FIXED_PARAMS = {
     'model': 'test',
     'data_path': 'data/001_60s_window',
-    'participants': ['tonmoy', 'asfik', 'alsaad', 'anam', 'ejaz', 'iftakhar', 'unk1'],
+    'participants': ['tonmoy', 'asfik', 'alsaad', 'anam', 'ejaz', 'iftakhar', 'unk1', 'ritwik'],
     'window_size': 3000,
     'use_augmentation': True,
     'early_stopping_patience_target': 50,
@@ -57,6 +59,7 @@ def compute_base_model_hash(config):
         'early_stopping_patience': config['early_stopping_patience'],
         'use_augmentation': config['use_augmentation'],
         'participants': config['participants'],  # Full list affects which are base
+        'seed': config.get('seed', 42),  # Different seeds = different initializations
     }
 
     # Add augmentation params if augmentation is enabled
@@ -89,6 +92,7 @@ def compute_finetune_experiment_hash(config):
         'early_stopping_patience_target': config['early_stopping_patience_target'],
         'use_augmentation': config['use_augmentation'],
         'participants': config['participants'],
+        'seed': config.get('seed', 42),  # Different seeds = different initializations
     }
 
     if config['use_augmentation']:
@@ -125,6 +129,7 @@ def generate_all_experiment_configs():
 
             # Run all folds
             for fold in range(len(FIXED_PARAMS['participants'])):
+                print(fold)
                 config = {
                     'fold': fold,
                     'prefix': prefix,
@@ -149,7 +154,7 @@ def generate_all_experiment_configs():
             prefix = f"b{params['batch_size']}_t{params['target_data_pct']}_{timestamp}"
 
             # Run all folds
-            for fold in range(len(FIXED_PARAMS['participants'])):
+            for fold in range(len(FIXED_PARAMS['participants']))[-1:]:
                 config = {
                     'fold': fold,
                     'prefix': prefix,
@@ -215,6 +220,7 @@ def generate_two_phase_jobs():
             'window_size': reference_config['window_size'],
             'participants': reference_config['participants'],
             'use_augmentation': reference_config['use_augmentation'],
+            'seed': reference_config.get('seed', 42),
         }
 
         if reference_config['use_augmentation']:

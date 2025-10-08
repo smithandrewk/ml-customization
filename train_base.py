@@ -14,6 +14,8 @@ import argparse
 import hashlib
 import json
 from time import time
+import random
+import numpy as np
 
 from lib.train_utils import *
 
@@ -38,6 +40,7 @@ def compute_base_model_hash(config):
         'early_stopping_patience': config['early_stopping_patience'],
         'use_augmentation': config['use_augmentation'],
         'participants': config['participants'],  # Full list affects which are base
+        'seed': config.get('seed', 42),  # Different seeds = different initializations
     }
 
     # Add augmentation params if augmentation is enabled
@@ -62,6 +65,13 @@ def main():
         raise ValueError(f"Data path {args.data_path} does not exist.")
 
     hyperparameters = vars(args)
+
+    # Set random seeds for reproducibility
+    seed = hyperparameters.get('seed', 42)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    np.random.seed(seed)
+    random.seed(seed)
 
     # Extract key parameters
     fold = hyperparameters['fold']
