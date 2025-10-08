@@ -35,7 +35,8 @@ def main():
     hyperparameters = vars(args)
 
     # Set random seeds for reproducibility
-    seed = hyperparameters.get('seed', 42)
+    # Use seed_finetune if available (for multiple finetune runs from same base), else use seed
+    seed = hyperparameters.get('seed_finetune', hyperparameters.get('seed', 42))
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)

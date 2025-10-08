@@ -205,13 +205,19 @@ def sync_cluster(cluster_config_path: str, clean_experiments: bool = False,
                     # Don't fail completely, just warn
                     print(f"[{host_string}] ⚠ Warning: Code may be out of sync")
 
-        # Clean experiments directory
+            # Always clear Python cache after git sync to avoid stale bytecode
+            cache_cmd = f"{base_cmd} && find . -type d -name __pycache__ -exec rm -rf {{}} + 2>/dev/null; true"
+            returncode, stdout, stderr = run_command_on_server(server, cache_cmd, verbose=False)
+            if returncode == 0:
+                print(f"[{host_string}] ✓ Python cache cleared")
+
+        # Clean experiments directory and Python cache
         if clean_experiments:
-            clean_cmd = f"{base_cmd} && rm -rf experiments && mkdir -p experiments"
+            clean_cmd = f"{base_cmd} && rm -rf experiments && mkdir -p experiments && find . -type d -name __pycache__ -exec rm -rf {{}} + 2>/dev/null; true"
             returncode, stdout, stderr = run_command_on_server(server, clean_cmd, verbose)
 
             if returncode == 0:
-                print(f"[{host_string}] ✓ Experiments directory cleaned")
+                print(f"[{host_string}] ✓ Experiments directory and Python cache cleaned")
             else:
                 print(f"[{host_string}] ✗ Failed to clean experiments directory")
                 fail_count += 1

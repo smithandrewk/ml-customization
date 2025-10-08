@@ -13,11 +13,105 @@ import subprocess
 import json
 import sys
 import os
-from typing import List, Dict
+import threading
+import time
+from typing import List, Dict, Optional
 from datetime import datetime
+from collections import deque
 
 
-def run_command(cmd: List[str], description: str, timeout: int = None) -> tuple:
+class LiveStatusMonitor:
+    """Monitor training progress and display live GPU status."""
+
+    def __init__(self, tmux_session: str, max_log_lines: int = 20):
+        self.tmux_session = tmux_session
+        self.max_log_lines = max_log_lines
+        self.job_log = deque(maxlen=max_log_lines)
+        self.gpu_status = {}
+        self.running = False
+        self.thread = None
+
+    def parse_tmux_output(self):
+        """Parse tmux pane output to extract job and GPU information."""
+        try:
+            # Get output from tmux pane
+            result = subprocess.run(
+                ["tmux", "capture-pane", "-p", "-t", f"{self.tmux_session}:0"],
+                capture_output=True,
+                text=True,
+                timeout=1
+            )
+
+            if result.returncode == 0:
+                lines = result.stdout.strip().split('\n')
+                # Look for job status lines
+                for line in lines[-50:]:  # Check last 50 lines
+                    if '[' in line and ']' in line:
+                        # Extract GPU and job info
+                        if 'Job' in line and 'starting' in line:
+                            self.job_log.append(f"🚀 {line.strip()}")
+                        elif 'Job' in line and ('✓' in line or 'finished' in line):
+                            self.job_log.append(f"✅ {line.strip()}")
+                        elif 'Job' in line and ('✗' in line or 'failed' in line):
+                            self.job_log.append(f"❌ {line.strip()}")
+
+                        # Update GPU status
+                        if 'Job' in line and 'Config:' in line:
+                            # Extract GPU info
+                            gpu_match = line.split('[')[1].split(']')[0] if '[' in line else None
+                            if gpu_match:
+                                self.gpu_status[gpu_match] = line.strip()
+
+        except Exception:
+            pass
+
+    def monitor_loop(self):
+        """Background thread that monitors tmux output."""
+        while self.running:
+            self.parse_tmux_output()
+            time.sleep(1)
+
+    def start(self):
+        """Start monitoring in background thread."""
+        self.running = True
+        self.thread = threading.Thread(target=self.monitor_loop, daemon=True)
+        self.thread.start()
+
+    def stop(self):
+        """Stop monitoring."""
+        self.running = False
+        if self.thread:
+            self.thread.join(timeout=2)
+
+    def get_status_display(self) -> str:
+        """Get current status as formatted string."""
+        output = []
+        output.append("=" * 80)
+        output.append("GPU STATUS")
+        output.append("=" * 80)
+
+        if self.gpu_status:
+            for gpu, status in sorted(self.gpu_status.items()):
+                output.append(f"{gpu}: {status}")
+        else:
+            output.append("Waiting for jobs to start...")
+
+        output.append("")
+        output.append("=" * 80)
+        output.append("RECENT JOB ACTIVITY")
+        output.append("=" * 80)
+
+        if self.job_log:
+            for log_line in self.job_log:
+                output.append(log_line)
+        else:
+            output.append("No job activity yet...")
+
+        return "\n".join(output)
+
+
+def run_command(cmd: List[str], description: str, timeout: int = None,
+                live_monitor: Optional[LiveStatusMonitor] = None) -> tuple:
     """
     Run a command and return (returncode, stdout, stderr).
 
@@ -25,6 +119,7 @@ def run_command(cmd: List[str], description: str, timeout: int = None) -> tuple:
         cmd: Command and arguments as list
         description: Description for logging
         timeout: Optional timeout in seconds
+        live_monitor: Optional LiveStatusMonitor for live display
 
     Returns:
         Tuple of (returncode, stdout, stderr)
@@ -34,6 +129,69 @@ def run_command(cmd: List[str], description: str, timeout: int = None) -> tuple:
     print(f"{'='*80}")
     print(f"Running: {' '.join(cmd)}\n")
 
+    # If live monitor is provided, run with live updates
+    if live_monitor:
+        try:
+            # Start the command
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+
+            # Start live monitoring
+            live_monitor.start()
+
+            # Clear screen and show initial status
+            print("\033[2J\033[H")  # Clear screen and move cursor to home
+            print(f"{'='*80}")
+            print(f"{description} - LIVE STATUS")
+            print(f"{'='*80}\n")
+            print("Tip: Attach to tmux session for full output:")
+            print(f"  tmux attach-session -t {live_monitor.tmux_session}\n")
+
+            # Poll for completion while updating display
+            start_time = time.time()
+            while process.poll() is None:
+                # Check timeout
+                if timeout and (time.time() - start_time) > timeout:
+                    process.kill()
+                    live_monitor.stop()
+                    return -1, "", "Timeout"
+
+                # Update display
+                print("\033[H")  # Move cursor to home
+                print(f"{'='*80}")
+                print(f"{description} - LIVE STATUS")
+                print(f"{'='*80}\n")
+                print("Tip: Attach to tmux session for full output:")
+                print(f"  tmux attach-session -t {live_monitor.tmux_session}\n")
+                print(live_monitor.get_status_display())
+
+                time.sleep(2)  # Update every 2 seconds
+
+            # Stop monitoring
+            live_monitor.stop()
+
+            # Get final output
+            stdout, stderr = process.communicate()
+
+            if process.returncode != 0:
+                print(f"\n⚠️  Command failed with exit code {process.returncode}")
+            else:
+                print(f"\n✓ {description} completed successfully")
+
+            return process.returncode, stdout, stderr
+
+        except Exception as e:
+            if live_monitor:
+                live_monitor.stop()
+            print(f"\n✗ Error running command: {e}")
+            return -1, "", str(e)
+
+    # Original non-live execution
     try:
         result = subprocess.run(
             cmd,
@@ -280,14 +438,21 @@ def main():
         epilog="""
 Example usage:
 
-  # Run complete two-phase workflow
-  python run_two_phase_distributed.py \\
+  # Run complete two-phase workflow with live status display
+  python3 run_two_phase_distributed.py \\
+      --cluster-config cluster_config.json \\
+      --base-jobs base_training_jobs.json \\
+      --finetune-jobs finetune_jobs.json \\
+      --live-status
+
+  # Run without live status (standard output)
+  python3 run_two_phase_distributed.py \\
       --cluster-config cluster_config.json \\
       --base-jobs base_training_jobs.json \\
       --finetune-jobs finetune_jobs.json
 
   # Skip base training (use existing base models)
-  python run_two_phase_distributed.py \\
+  python3 run_two_phase_distributed.py \\
       --cluster-config cluster_config.json \\
       --finetune-jobs finetune_jobs.json \\
       --skip-base-training
@@ -297,6 +462,12 @@ Workflow:
   2. Wait for completion
   3. Sync base model experiments to all nodes
   4. Train all fine-tuning experiments in parallel
+
+Live Status Display (--live-status):
+  Shows a two-panel display with:
+  - GPU Status: Which job is running on each GPU
+  - Job Activity: Recent job starts/completions
+  Updates every 2 seconds. Attach to tmux for full output.
         """
     )
 
@@ -312,6 +483,8 @@ Workflow:
                        help='Skip syncing base models (assume already synced)')
     parser.add_argument('--tmux-session', default='ml_training',
                        help='Name of tmux session (default: ml_training)')
+    parser.add_argument('--live-status', action='store_true',
+                       help='Show live GPU status and job activity (two-panel display)')
     parser.add_argument('--quiet', action='store_true',
                        help='Reduce output verbosity')
 
@@ -359,10 +532,16 @@ Workflow:
         if args.quiet:
             base_cmd.append("--quiet")
 
+        # Create live monitor if requested
+        live_monitor = None
+        if args.live_status and not args.quiet:
+            live_monitor = LiveStatusMonitor(args.tmux_session)
+
         returncode, stdout, stderr = run_command(
             base_cmd,
             "Phase 1: Base Model Training",
-            timeout=7200  # 2 hour timeout
+            timeout=7200,  # 2 hour timeout
+            live_monitor=live_monitor
         )
 
         if returncode != 0:
@@ -420,10 +599,16 @@ Workflow:
     if args.quiet:
         finetune_cmd.append("--quiet")
 
+    # Create live monitor if requested
+    live_monitor = None
+    if args.live_status and not args.quiet:
+        live_monitor = LiveStatusMonitor(args.tmux_session)
+
     returncode, stdout, stderr = run_command(
         finetune_cmd,
         "Phase 2: Fine-Tuning",
-        timeout=14400  # 4 hour timeout
+        timeout=14400,  # 4 hour timeout
+        live_monitor=live_monitor
     )
 
     if returncode != 0:

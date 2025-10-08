@@ -24,7 +24,8 @@ def add_arguments(argparser):
     argparser.add_argument('--window_size', type=int, default=3000, help='Window size in samples (e.g., 3000 = 60s at 50Hz)')
     argparser.add_argument('--data_path', type=str, default='data/001_60s_window', help='Path to dataset directory')
     argparser.add_argument('--n_base_participants', type=str, default='all', help='Number of base participants to use (integer or "all")')
-    argparser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
+    argparser.add_argument('--seed', type=int, default=42, help='Random seed for base model training')
+    argparser.add_argument('--seed_finetune', type=int, default=None, help='Random seed for fine-tuning (if not set, uses --seed)')
     return argparser
 
 def load_config(config_path):

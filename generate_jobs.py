@@ -17,9 +17,11 @@ from datetime import datetime
 GRID_PARAMS = {
     'batch_size': [32],
     'lr': [3e-4],
-    'seed': [42, 123, 456],
+    'seed': list(range(1)),
+    'seed_finetune': list(range(5)),  # 5 different finetune runs
     'early_stopping_patience': [50],
-    'mode': ['target_only'],
+    'early_stopping_patience_target': [50],
+    'mode': ['target_only_fine_tuning'],
     # 'target_data_pct': [0.01, 0.05, 0.125, 0.25, 0.5, 1.0],
     'target_data_pct': [1.0],
     'n_base_participants': [7],
@@ -32,7 +34,6 @@ FIXED_PARAMS = {
     'participants': ['tonmoy', 'asfik', 'alsaad', 'anam', 'ejaz', 'iftakhar', 'unk1', 'ritwik'],
     'window_size': 3000,
     'use_augmentation': True,
-    'early_stopping_patience_target': 50,
     'jitter_std': 0.005,
     'magnitude_range': [0.98, 1.02],
     'aug_prob': 0.3,
@@ -79,6 +80,7 @@ def compute_finetune_experiment_hash(config):
 
     Excludes fold and base model reference so all folds with same
     fine-tuning hyperparameters share one experiment directory.
+    Uses seed_finetune (not seed) to allow multiple finetune runs from same base.
     """
     finetune_config = {
         'mode': config['mode'],
@@ -92,7 +94,7 @@ def compute_finetune_experiment_hash(config):
         'early_stopping_patience_target': config['early_stopping_patience_target'],
         'use_augmentation': config['use_augmentation'],
         'participants': config['participants'],
-        'seed': config.get('seed', 42),  # Different seeds = different initializations
+        'seed_finetune': config.get('seed_finetune', config.get('seed', 42)),  # Use seed_finetune if available, else seed
     }
 
     if config['use_augmentation']:
@@ -128,7 +130,7 @@ def generate_all_experiment_configs():
             prefix = f"b{params['batch_size']}_t{params['target_data_pct']}_{timestamp}"
 
             # Run all folds
-            for fold in range(len(FIXED_PARAMS['participants'])):
+            for fold in range(len(FIXED_PARAMS['participants']))[-1:]:
                 print(fold)
                 config = {
                     'fold': fold,
@@ -308,16 +310,23 @@ def main():
 
     print("Next steps:")
     print("1. Train base models:")
-    print("   python run_distributed_training.py \\")
+    print("   python3 run_distributed_training.py \\")
     print("       --cluster-config cluster_config.json \\")
     print("       --jobs-config base_training_jobs.json \\")
     print("       --script-path train_base.py")
     print()
     print("2. Fine-tune on targets:")
-    print("   python run_distributed_training.py \\")
+    print("   python3 run_distributed_training.py \\")
     print("       --cluster-config cluster_config.json \\")
     print("       --jobs-config finetune_jobs.json \\")
     print("       --script-path train_finetune.py")
+    print()
+    print("OR run both phases automatically:")
+    print("   python3 run_two_phase_distributed.py \\")
+    print("       --cluster-config cluster_config.json \\")
+    print("       --base-jobs base_training_jobs.json \\")
+    print("       --finetune-jobs finetune_jobs.json \\")
+    print("       --live-status  # Shows live GPU status and job activity")
 
 
 if __name__ == '__main__':
