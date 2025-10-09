@@ -31,57 +31,52 @@ class LiveStatusMonitor:
         self.running = False
         self.thread = None
 
-    def parse_tmux_output(self):
-        """Parse tmux pane output to extract job and GPU information."""
+    def parse_line(self, line: str):
+        """Parse a single output line to extract job and GPU information."""
+        line = line.strip()
+
+        if not line or '[' not in line:
+            return
+
+        # Extract GPU identifier from [gpu_string]
         try:
-            # Get output from tmux pane
-            result = subprocess.run(
-                ["tmux", "capture-pane", "-p", "-t", f"{self.tmux_session}:0"],
-                capture_output=True,
-                text=True,
-                timeout=1
-            )
+            gpu_match = line.split('[')[1].split(']')[0]
+        except:
+            return
 
-            if result.returncode == 0:
-                lines = result.stdout.strip().split('\n')
-                # Look for job status lines
-                for line in lines[-50:]:  # Check last 50 lines
-                    if '[' in line and ']' in line:
-                        # Extract GPU and job info
-                        if 'Job' in line and 'starting' in line:
-                            self.job_log.append(f"🚀 {line.strip()}")
-                        elif 'Job' in line and ('✓' in line or 'finished' in line):
-                            self.job_log.append(f"✅ {line.strip()}")
-                        elif 'Job' in line and ('✗' in line or 'failed' in line):
-                            self.job_log.append(f"❌ {line.strip()}")
+        # Track job starts
+        if 'Job' in line and 'starting' in line:
+            log_entry = f"🚀 {line}"
+            if log_entry not in self.job_log:  # Avoid duplicates
+                self.job_log.append(log_entry)
+            # Update GPU status to show this job is running
+            try:
+                job_id = line.split('Job')[1].split()[0]
+                self.gpu_status[gpu_match] = f"Running Job {job_id}"
+            except:
+                self.gpu_status[gpu_match] = "Running"
 
-                        # Update GPU status
-                        if 'Job' in line and 'Config:' in line:
-                            # Extract GPU info
-                            gpu_match = line.split('[')[1].split(']')[0] if '[' in line else None
-                            if gpu_match:
-                                self.gpu_status[gpu_match] = line.strip()
+        # Track job completions
+        elif 'Job' in line and ('✓' in line or 'finished' in line):
+            log_entry = f"✅ {line}"
+            if log_entry not in self.job_log:
+                self.job_log.append(log_entry)
+            self.gpu_status[gpu_match] = "Idle"
 
-        except Exception:
-            pass
-
-    def monitor_loop(self):
-        """Background thread that monitors tmux output."""
-        while self.running:
-            self.parse_tmux_output()
-            time.sleep(1)
+        # Track job failures
+        elif 'Job' in line and ('✗' in line or 'failed' in line):
+            log_entry = f"❌ {line}"
+            if log_entry not in self.job_log:
+                self.job_log.append(log_entry)
+            self.gpu_status[gpu_match] = "Failed"
 
     def start(self):
-        """Start monitoring in background thread."""
+        """Start monitoring."""
         self.running = True
-        self.thread = threading.Thread(target=self.monitor_loop, daemon=True)
-        self.thread.start()
 
     def stop(self):
         """Stop monitoring."""
         self.running = False
-        if self.thread:
-            self.thread.join(timeout=2)
 
     def get_status_display(self) -> str:
         """Get current status as formatted string."""
@@ -132,13 +127,13 @@ def run_command(cmd: List[str], description: str, timeout: int = None,
     # If live monitor is provided, run with live updates
     if live_monitor:
         try:
-            # Start the command
+            # Start the command and capture stdout for parsing
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                bufsize=1
+                bufsize=1  # Line buffered
             )
 
             # Start live monitoring
@@ -152,38 +147,54 @@ def run_command(cmd: List[str], description: str, timeout: int = None,
             print("Tip: Attach to tmux session for full output:")
             print(f"  tmux attach-session -t {live_monitor.tmux_session}\n")
 
-            # Poll for completion while updating display
+            # Read output line by line and update display
             start_time = time.time()
-            while process.poll() is None:
+            all_output = []
+            last_update = time.time()
+
+            for line in iter(process.stdout.readline, ''):
+                if not line:
+                    break
+
+                all_output.append(line)
+                live_monitor.parse_line(line)
+
                 # Check timeout
                 if timeout and (time.time() - start_time) > timeout:
                     process.kill()
                     live_monitor.stop()
                     return -1, "", "Timeout"
 
-                # Update display
-                print("\033[H")  # Move cursor to home
-                print(f"{'='*80}")
-                print(f"{description} - LIVE STATUS")
-                print(f"{'='*80}\n")
-                print("Tip: Attach to tmux session for full output:")
-                print(f"  tmux attach-session -t {live_monitor.tmux_session}\n")
-                print(live_monitor.get_status_display())
+                # Update display every 2 seconds
+                if time.time() - last_update > 2:
+                    print("\033[H")  # Move cursor to home
+                    print(f"{'='*80}")
+                    print(f"{description} - LIVE STATUS")
+                    print(f"{'='*80}\n")
+                    print("Tip: Attach to tmux session for full output:")
+                    print(f"  tmux attach-session -t {live_monitor.tmux_session}\n")
+                    print(live_monitor.get_status_display())
+                    last_update = time.time()
 
-                time.sleep(2)  # Update every 2 seconds
+            # Wait for process to complete
+            process.wait()
 
             # Stop monitoring
             live_monitor.stop()
 
-            # Get final output
-            stdout, stderr = process.communicate()
+            # Clear screen one more time and show final status
+            print("\033[2J\033[H")
+            print(f"{'='*80}")
+            print(f"{description} - FINAL STATUS")
+            print(f"{'='*80}\n")
+            print(live_monitor.get_status_display())
 
             if process.returncode != 0:
                 print(f"\n⚠️  Command failed with exit code {process.returncode}")
             else:
                 print(f"\n✓ {description} completed successfully")
 
-            return process.returncode, stdout, stderr
+            return process.returncode, ''.join(all_output), ""
 
         except Exception as e:
             if live_monitor:

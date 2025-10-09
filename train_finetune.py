@@ -223,10 +223,6 @@ def main():
     print(f"\nStarting fine-tuning (max {early_stopping_patience} epochs patience)...\n")
 
     while True:
-        if epoch >= 500:
-            print("Maximum epochs reached (500).")
-            break
-
         start_time = time()
 
         # Training step

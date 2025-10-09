@@ -13,15 +13,22 @@ from collections import defaultdict
 from datetime import datetime
 
 
+# Job generation control (not stored in hyperparameters)
+# Options:
+#   'all' - run all participants
+#   'ritwik' - run only ritwik fold
+#   ['ritwik', 'tonmoy'] - run only these specific participants
+RUN_FOLDS = 'will'  # Change this to control which folds to generate
+
 # Grid search parameters
 GRID_PARAMS = {
     'batch_size': [32],
     'lr': [3e-4],
     'seed': list(range(1)),
-    'seed_finetune': list(range(5)),  # 5 different finetune runs
+    'seed_finetune': list(range(6)),  # 5 different finetune runs
     'early_stopping_patience': [50],
-    'early_stopping_patience_target': [50],
-    'mode': ['target_only_fine_tuning'],
+    'early_stopping_patience_target': [500],
+    'mode': ['target_only'],
     # 'target_data_pct': [0.01, 0.05, 0.125, 0.25, 0.5, 1.0],
     'target_data_pct': [1.0],
     'n_base_participants': [7],
@@ -31,13 +38,41 @@ GRID_PARAMS = {
 FIXED_PARAMS = {
     'model': 'test',
     'data_path': 'data/001_60s_window',
-    'participants': ['tonmoy', 'asfik', 'alsaad', 'anam', 'ejaz', 'iftakhar', 'unk1', 'ritwik'],
+    'participants': ['tonmoy', 'asfik', 'alsaad', 'anam', 'ejaz', 'iftakhar', 'unk1', 'ritwik','will'],
     'window_size': 3000,
     'use_augmentation': True,
     'jitter_std': 0.005,
     'magnitude_range': [0.98, 1.02],
     'aug_prob': 0.3,
 }
+
+
+def get_folds_to_run():
+    """
+    Determine which fold indices to run based on RUN_FOLDS parameter.
+
+    Returns:
+        list of fold indices to generate jobs for
+    """
+    all_participants = FIXED_PARAMS['participants']
+
+    if RUN_FOLDS == 'all':
+        return list(range(len(all_participants)))
+    elif isinstance(RUN_FOLDS, str):
+        # Single participant name
+        if RUN_FOLDS not in all_participants:
+            raise ValueError(f"Participant '{RUN_FOLDS}' not found in participants list: {all_participants}")
+        return [all_participants.index(RUN_FOLDS)]
+    elif isinstance(RUN_FOLDS, list):
+        # List of participant names
+        fold_indices = []
+        for participant in RUN_FOLDS:
+            if participant not in all_participants:
+                raise ValueError(f"Participant '{participant}' not found in participants list: {all_participants}")
+            fold_indices.append(all_participants.index(participant))
+        return fold_indices
+    else:
+        raise ValueError(f"Invalid RUN_FOLDS value: {RUN_FOLDS}. Must be 'all', a participant name, or list of names.")
 
 
 def compute_base_model_hash(config):
@@ -129,8 +164,8 @@ def generate_all_experiment_configs():
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             prefix = f"b{params['batch_size']}_t{params['target_data_pct']}_{timestamp}"
 
-            # Run all folds
-            for fold in range(len(FIXED_PARAMS['participants']))[-1:]:
+            # Run selected folds based on RUN_FOLDS parameter
+            for fold in get_folds_to_run():
                 print(fold)
                 config = {
                     'fold': fold,
@@ -155,8 +190,8 @@ def generate_all_experiment_configs():
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             prefix = f"b{params['batch_size']}_t{params['target_data_pct']}_{timestamp}"
 
-            # Run all folds
-            for fold in range(len(FIXED_PARAMS['participants']))[-1:]:
+            # Run selected folds based on RUN_FOLDS parameter
+            for fold in get_folds_to_run():
                 config = {
                     'fold': fold,
                     'prefix': prefix,
@@ -269,6 +304,18 @@ def generate_two_phase_jobs():
 
 def main():
     """Generate and save job configurations."""
+    # Show which folds will be generated
+    folds_to_run = get_folds_to_run()
+    participants_to_run = [FIXED_PARAMS['participants'][i] for i in folds_to_run]
+
+    print(f"\n{'='*80}")
+    print(f"Fold Selection")
+    print(f"{'='*80}")
+    print(f"RUN_FOLDS setting: {RUN_FOLDS}")
+    print(f"Generating jobs for {len(folds_to_run)} fold(s): {participants_to_run}")
+    print(f"Fold indices: {folds_to_run}")
+    print(f"{'='*80}\n")
+
     base_jobs, finetune_jobs = generate_two_phase_jobs()
 
     # Save base training jobs
