@@ -83,8 +83,9 @@ def main():
 
         # Create model from scratch
         model_type = hyperparameters['model']
+        dropout = hyperparameters.get('dropout', 0.5)
         from lib.models import TestModel
-        model = TestModel()
+        model = TestModel(dropout=dropout)
         model.to(device)
 
         print(f"Initialized fresh model: {model.__class__.__name__}")
@@ -128,8 +129,9 @@ def main():
 
         # Create model and load base weights
         model_type = hyperparameters['model']
+        dropout = hyperparameters.get('dropout', 0.5)
         from lib.models import TestModel
-        model = TestModel()
+        model = TestModel(dropout=dropout)
         model.load_state_dict(torch.load(base_model_path, map_location='cpu'))
         model.to(device)
 

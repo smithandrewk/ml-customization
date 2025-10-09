@@ -27,8 +27,9 @@ GRID_PARAMS = {
     'seed': list(range(1)),
     'seed_finetune': list(range(10, 16)),  # 5 different finetune runs
     'early_stopping_patience': [50],
-    'early_stopping_patience_target': [50],
-    'early_stopping_metric': ['f1','loss'],  # Options: 'f1' or 'loss'
+    'early_stopping_patience_target': [100],
+    'early_stopping_metric': ['f1'],  # Options: 'f1' or 'loss'
+    'dropout': [0.0, 0.5],  # 0.0 = no dropout, 0.5 = standard dropout
     'mode': ['target_only'],
     'target_data_pct': [1.0],
     'n_base_participants': [7],
@@ -96,6 +97,7 @@ def compute_base_model_hash(config):
         'window_size': config['window_size'],
         'batch_size': config['batch_size'],
         'lr': config['lr'],
+        'dropout': config.get('dropout', 0.5),
         'early_stopping_patience': config['early_stopping_patience'],
         'early_stopping_metric': config.get('early_stopping_metric', 'loss'),
         'use_augmentation': config['use_augmentation'],
@@ -131,6 +133,7 @@ def compute_finetune_experiment_hash(config):
         'window_size': config['window_size'],
         'batch_size': config['batch_size'],
         'lr': config['lr'],
+        'dropout': config.get('dropout', 0.5),
         'early_stopping_patience_target': config['early_stopping_patience_target'],
         'early_stopping_metric': config.get('early_stopping_metric', 'loss'),
         'use_augmentation': config['use_augmentation'],

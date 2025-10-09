@@ -31,7 +31,7 @@ class Block(nn.Module):
             x = self.pool(x)
         return x
 class TestModel(nn.Module):
-    def __init__(self):
+    def __init__(self, dropout=0.5):
         super(TestModel, self).__init__()
         self.blocks = []
         self.blocks.append(Block(6,8))
@@ -40,15 +40,17 @@ class TestModel(nn.Module):
             self.blocks.append(Block(8,8,pool=False))
 
         self.blocks.append(Block(8,16,pool=False))
-            
+
         self.blocks = nn.ModuleList(self.blocks)
         self.gap = nn.AdaptiveAvgPool1d(1)
+        self.dropout = nn.Dropout(p=dropout)
         self.fc = nn.Linear(16, 1)
-    
+
     def forward(self, x):
         for block in self.blocks:
             x = block(x)
-        
+
         x = self.gap(x).squeeze(-1)
+        x = self.dropout(x)
         x = self.fc(x)
         return x

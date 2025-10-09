@@ -148,8 +148,9 @@ def main():
 
     # Create model
     model_type = hyperparameters['model']
+    dropout = hyperparameters.get('dropout', 0.5)
     from lib.models import TestModel
-    model = TestModel()
+    model = TestModel(dropout=dropout)
     model.to(device)
 
     criterion = nn.BCEWithLogitsLoss()
