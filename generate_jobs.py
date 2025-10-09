@@ -100,6 +100,7 @@ def compute_base_model_hash(config):
         'batch_size': config['batch_size'],
         'lr': config['lr'],
         'dropout': config.get('dropout', 0.5),
+        'use_dilation': config.get('use_dilation', False),
         'early_stopping_patience': config['early_stopping_patience'],
         'early_stopping_metric': config.get('early_stopping_metric', 'loss'),
         'use_augmentation': config['use_augmentation'],
@@ -136,6 +137,7 @@ def compute_finetune_experiment_hash(config):
         'batch_size': config['batch_size'],
         'lr': config['lr'],
         'dropout': config.get('dropout', 0.5),
+        'use_dilation': config.get('use_dilation', False),
         'early_stopping_patience_target': config['early_stopping_patience_target'],
         'early_stopping_metric': config.get('early_stopping_metric', 'loss'),
         'use_augmentation': config['use_augmentation'],
@@ -259,8 +261,11 @@ def generate_two_phase_jobs():
             'model': reference_config['model'],
             'prefix': f"base_{base_hash}",
             'lr': reference_config['lr'],
+            'dropout': reference_config.get('dropout', 0.5),
+            'use_dilation': reference_config.get('use_dilation', False),
             'early_stopping_patience': reference_config['early_stopping_patience'],
             'early_stopping_patience_target': reference_config['early_stopping_patience_target'],
+            'early_stopping_metric': reference_config.get('early_stopping_metric', 'loss'),
             'mode': 'full_fine_tuning',  # Doesn't matter for base training
             'target_data_pct': 1.0,  # Doesn't matter for base training
             'n_base_participants': reference_config['n_base_participants'],

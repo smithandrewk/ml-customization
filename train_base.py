@@ -39,6 +39,8 @@ def compute_base_model_hash(config):
         'lr': config['lr'],
         'early_stopping_patience': config['early_stopping_patience'],
         'use_augmentation': config['use_augmentation'],
+        'use_dilation': config.get('use_dilation', False),
+        'dropout': config.get('dropout', 0.5),
         'participants': config['participants'],  # Full list affects which are base
         'seed': config.get('seed', 42),  # Different seeds = different initializations
     }
@@ -149,8 +151,9 @@ def main():
     # Create model
     model_type = hyperparameters['model']
     dropout = hyperparameters.get('dropout', 0.5)
+    use_dilation = hyperparameters.get('use_dilation', False)
     from lib.models import TestModel
-    model = TestModel(dropout=dropout)
+    model = TestModel(dropout=dropout, use_dilation=use_dilation)
     model.to(device)
 
     criterion = nn.BCEWithLogitsLoss()

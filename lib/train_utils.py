@@ -76,6 +76,7 @@ def add_arguments(argparser):
     argparser.add_argument('--magnitude_range', type=float, nargs=2, default=[0.98, 1.02], help='Range for magnitude scaling')
     argparser.add_argument('--aug_prob', type=float, default=0.3, help='Probability of applying augmentation')
     argparser.add_argument('--dropout', type=float, default=0.5, help='Dropout probability (0.0 = no dropout)')
+    argparser.add_argument('--use_dilation', action='store_true', help='Enable exponential dilation (1,2,4,8) in convolutional blocks')
     argparser.add_argument('--prefix', type=str, default=timestamp, help='Experiment prefix/directory name')
     argparser.add_argument('--early_stopping_patience', type=int, default=40, help='Early stopping patience for base phase')
     argparser.add_argument('--early_stopping_patience_target', type=int, default=40, help='Early stopping patience for target phase')
