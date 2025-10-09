@@ -211,6 +211,16 @@ def sync_cluster(cluster_config_path: str, clean_experiments: bool = False,
             if returncode == 0:
                 print(f"[{host_string}] ✓ Python cache cleared")
 
+            # Install/update Python dependencies
+            pip_cmd = f"{base_cmd} && source env/bin/activate && pip install -q -r requirements.txt"
+            returncode, stdout, stderr = run_command_on_server(server, pip_cmd, verbose=False)
+
+            if returncode == 0:
+                print(f"[{host_string}] ✓ Dependencies installed")
+            else:
+                print(f"[{host_string}] ✗ Failed to install dependencies - continuing anyway")
+                print(f"[{host_string}] ⚠ Warning: Dependencies may be out of date")
+
         # Clean experiments directory and Python cache
         if clean_experiments:
             clean_cmd = f"{base_cmd} && rm -rf experiments && mkdir -p experiments && find . -type d -name __pycache__ -exec rm -rf {{}} + 2>/dev/null; true"
