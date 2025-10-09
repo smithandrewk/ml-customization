@@ -76,7 +76,10 @@ def add_arguments(argparser):
     argparser.add_argument('--magnitude_range', type=float, nargs=2, default=[0.98, 1.02], help='Range for magnitude scaling')
     argparser.add_argument('--aug_prob', type=float, default=0.3, help='Probability of applying augmentation')
     argparser.add_argument('--dropout', type=float, default=0.5, help='Dropout probability (0.0 = no dropout)')
-    argparser.add_argument('--use_dilation', action='store_true', help='Enable exponential dilation (1,2,4,8) in convolutional blocks')
+    argparser.add_argument('--use_dilation', action='store_true', help='Enable exponential dilation (1,2,4,8,...) in convolutional blocks')
+    argparser.add_argument('--base_channels', type=int, default=8, help='Base number of channels in convolutional layers (8, 16, 32, etc.)')
+    argparser.add_argument('--num_blocks', type=int, default=4, help='Number of convolutional blocks (depth of network)')
+    argparser.add_argument('--use_residual', action='store_true', help='Enable residual connections (skip connections)')
     argparser.add_argument('--prefix', type=str, default=timestamp, help='Experiment prefix/directory name')
     argparser.add_argument('--early_stopping_patience', type=int, default=40, help='Early stopping patience for base phase')
     argparser.add_argument('--early_stopping_patience_target', type=int, default=40, help='Early stopping patience for target phase')
@@ -429,3 +432,67 @@ class TimeSeriesAugmenter:
             X_aug = self.time_warp(X_aug)
         
         return X_aug, y
+
+import seaborn as sns
+def plot_hyperparameter_counts(df, hyperparameters_to_plot, max_combinations=10):
+    """
+    Create heatmaps showing counts of hyperparameter combinations
+    """
+    if len(hyperparameters_to_plot) < 2:
+        print("Need at least 2 hyperparameters for combination plots")
+        return
+    
+    # Generate all pairs of hyperparameters
+    from itertools import combinations
+    param_pairs = list(combinations(hyperparameters_to_plot, 2))
+    
+    if len(param_pairs) > max_combinations:
+        print(f"Too many combinations ({len(param_pairs)}), showing first {max_combinations}")
+        param_pairs = param_pairs[:max_combinations]
+    
+    # Calculate grid dimensions
+    n_pairs = len(param_pairs)
+    n_cols = min(3, n_pairs)
+    n_rows = (n_pairs + n_cols - 1) // n_cols
+    
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 5 * n_rows))
+    
+    # Handle single subplot case
+    if n_pairs == 1:
+        axes = [axes]
+    elif n_rows == 1:
+        axes = axes.reshape(1, -1)
+    
+    axes_flat = axes.flatten() if n_pairs > 1 else axes
+    
+    for i, (param1, param2) in enumerate(param_pairs):
+        ax = axes_flat[i]
+        
+        # Check if parameters exist in dataframe
+        if param1 not in df.columns or param2 not in df.columns:
+            ax.text(0.5, 0.5, f'Parameters "{param1}" or "{param2}"\nnot found in data', 
+                   ha='center', va='center', transform=ax.transAxes)
+            ax.set_title(f'{param1} vs {param2} (Not Found)')
+            continue
+        
+        # Create combination counts
+        combo_df = df.groupby([param1, param2]).size().reset_index(name='count')
+        
+        # Create pivot table
+        pivot_df = combo_df.pivot_table(
+            values='count', 
+            index=param1, 
+            columns=param2, 
+            fill_value=0
+        )
+        
+        # Create heatmap
+        sns.heatmap(pivot_df, annot=True, cmap='Blues', ax=ax)
+        ax.set_title(f'{param1} vs {param2} Counts')
+    
+    # Hide unused subplots
+    for i in range(n_pairs, len(axes_flat)):
+        axes_flat[i].set_visible(False)
+    
+    plt.tight_layout()
+    plt.show()

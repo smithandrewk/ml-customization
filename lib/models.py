@@ -15,7 +15,7 @@ class ConvLayerNorm(nn.Module):
         return x
 
 class Block(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=3, padding=1, pool_size=2, pool=True, dilation=1) -> None:
+    def __init__(self, in_channels, out_channels, kernel_size=3, padding=1, pool_size=2, pool=True, dilation=1, use_residual=False) -> None:
         super(Block,self).__init__()
         self.pool = pool
         # Adjust padding for dilation to maintain output size
@@ -25,6 +25,7 @@ class Block(nn.Module):
         self.ln = ConvLayerNorm(out_channels)
         if self.pool:
             self.pool = nn.MaxPool1d(pool_size)
+        # use_residual parameter is ignored in non-residual Block, but kept for compatibility
 
     def forward(self,x):
         x = self.conv(x)
@@ -33,25 +34,78 @@ class Block(nn.Module):
         if self.pool:
             x = self.pool(x)
         return x
+
+class ResidualBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=3, padding=1, pool_size=2, pool=True, dilation=1, use_residual=True) -> None:
+        super(ResidualBlock, self).__init__()
+        self.pool_flag = pool
+        self.use_residual = use_residual
+
+        # Adjust padding for dilation to maintain output size
+        if dilation > 1:
+            padding = dilation * (kernel_size - 1) // 2
+
+        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding, dilation=dilation)
+        self.ln = ConvLayerNorm(out_channels)
+
+        if self.pool_flag:
+            self.pool = nn.MaxPool1d(pool_size)
+
+        # Projection layer for residual connection when channels change
+        self.projection = None
+        if use_residual and in_channels != out_channels:
+            self.projection = nn.Conv1d(in_channels, out_channels, kernel_size=1)
+
+    def forward(self, x):
+        identity = x
+
+        # Main path
+        out = self.conv(x)
+        out = self.ln(out)
+        out = torch.relu(out)
+
+        # Residual connection (before pooling!)
+        if self.use_residual:
+            if self.projection is not None:
+                identity = self.projection(identity)
+            out = out + identity  # Skip connection
+
+        # Pooling after residual (important!)
+        if self.pool_flag:
+            out = self.pool(out)
+
+        return out
 class TestModel(nn.Module):
-    def __init__(self, dropout=0.5, use_dilation=False):
+    def __init__(self, dropout=0.5, use_dilation=False, base_channels=8, num_blocks=4, use_residual=True):
         super(TestModel, self).__init__()
         self.blocks = []
 
-        # Exponentially increasing dilation if enabled: 1, 2, 4, 8
-        dilations = [1, 2, 4, 8] if use_dilation else [1, 1, 1, 1]
+        # Generate dilation pattern based on num_blocks
+        if use_dilation:
+            dilations = [2**i for i in range(num_blocks)]  # [1, 2, 4, 8, 16, ...]
+        else:
+            dilations = [1] * num_blocks
 
-        self.blocks.append(Block(6, 8, dilation=dilations[0]))
-        for _ in range(1):
-            self.blocks.append(Block(8, 8, dilation=dilations[1]))
-            self.blocks.append(Block(8, 8, pool=False, dilation=dilations[2]))
+        # Choose block type based on use_residual
+        BlockType = ResidualBlock if use_residual else Block
 
-        self.blocks.append(Block(8, 16, pool=False, dilation=dilations[3]))
+        # First block: 6 input channels -> base_channels
+        self.blocks.append(BlockType(6, base_channels, dilation=dilations[0], use_residual=use_residual))
+
+        # Middle blocks: base_channels -> base_channels (pool every other block)
+        for i in range(1, num_blocks - 1):
+            pool = (i % 2 == 1)  # Pool on odd indices (1, 3, 5...)
+            self.blocks.append(BlockType(base_channels, base_channels,
+                                        pool=pool, dilation=dilations[i], use_residual=use_residual))
+
+        # Last block: base_channels -> base_channels*2 (no pool)
+        self.blocks.append(BlockType(base_channels, base_channels * 2,
+                                    pool=False, dilation=dilations[-1], use_residual=use_residual))
 
         self.blocks = nn.ModuleList(self.blocks)
         self.gap = nn.AdaptiveAvgPool1d(1)
         self.dropout = nn.Dropout(p=dropout)
-        self.fc = nn.Linear(16, 1)
+        self.fc = nn.Linear(base_channels * 2, 1)
 
     def forward(self, x):
         for block in self.blocks:

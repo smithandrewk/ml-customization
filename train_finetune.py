@@ -85,8 +85,12 @@ def main():
         model_type = hyperparameters['model']
         dropout = hyperparameters.get('dropout', 0.5)
         use_dilation = hyperparameters.get('use_dilation', False)
+        base_channels = hyperparameters.get('base_channels', 8)
+        num_blocks = hyperparameters.get('num_blocks', 4)
+        use_residual = hyperparameters.get('use_residual', True)
         from lib.models import TestModel
-        model = TestModel(dropout=dropout, use_dilation=use_dilation)
+        model = TestModel(dropout=dropout, use_dilation=use_dilation, base_channels=base_channels,
+                         num_blocks=num_blocks, use_residual=use_residual)
         model.to(device)
 
         print(f"Initialized fresh model: {model.__class__.__name__}")
@@ -132,8 +136,12 @@ def main():
         model_type = hyperparameters['model']
         dropout = hyperparameters.get('dropout', 0.5)
         use_dilation = hyperparameters.get('use_dilation', False)
+        base_channels = hyperparameters.get('base_channels', 8)
+        num_blocks = hyperparameters.get('num_blocks', 4)
+        use_residual = hyperparameters.get('use_residual', True)
         from lib.models import TestModel
-        model = TestModel(dropout=dropout, use_dilation=use_dilation)
+        model = TestModel(dropout=dropout, use_dilation=use_dilation, base_channels=base_channels,
+                         num_blocks=num_blocks, use_residual=use_residual)
         model.load_state_dict(torch.load(base_model_path, map_location='cpu'))
         model.to(device)
 
