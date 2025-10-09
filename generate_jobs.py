@@ -18,18 +18,19 @@ from datetime import datetime
 #   'all' - run all participants
 #   'ritwik' - run only ritwik fold
 #   ['ritwik', 'tonmoy'] - run only these specific participants
-RUN_FOLDS = 'dennis'  # Change this to control which folds to generate
+RUN_FOLDS = 'tj'  # Change this to control which folds to generate
 
 # Grid search parameters
 GRID_PARAMS = {
     'batch_size': [32],
     'lr': [3e-4],
     'seed': list(range(1)),
-    'seed_finetune': list(range(10, 16)),  # 5 different finetune runs
+    'seed_finetune': list(range(5)),  # 5 different finetune runs
     'early_stopping_patience': [50],
     'early_stopping_patience_target': [100],
     'early_stopping_metric': ['f1'],  # Options: 'f1' or 'loss'
-    'dropout': [0.0, 0.5],  # 0.0 = no dropout, 0.5 = standard dropout
+    'use_dilation': [True, False],
+    'dropout': [0.0],  # 0.0 = no dropout, 0.5 = standard dropout
     'mode': ['target_only'],
     'target_data_pct': [1.0],
     'n_base_participants': [7],
@@ -37,13 +38,14 @@ GRID_PARAMS = {
 
 # Will 2/5, not the best
 # Ashlin 0/5, I think the test set may be too small or totally unrelated
-# Dennis
+# Dennis, target only didnt work very welll
+
 
 # Fixed parameters
 FIXED_PARAMS = {
     'model': 'test',
     'data_path': 'data/001_60s_window',
-    'participants': ['tonmoy', 'asfik', 'alsaad', 'anam', 'ejaz', 'iftakhar', 'unk1', 'ritwik','dennis'],
+    'participants': ['tonmoy', 'asfik', 'alsaad', 'anam', 'ejaz', 'iftakhar', 'unk1', 'ritwik','dennis','tj'],
     'window_size': 3000,
     'use_augmentation': True,
     'jitter_std': 0.005,

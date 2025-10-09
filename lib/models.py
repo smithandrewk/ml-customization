@@ -15,10 +15,13 @@ class ConvLayerNorm(nn.Module):
         return x
 
 class Block(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size=3, padding=1, pool_size=2, pool=True) -> None:
+    def __init__(self, in_channels, out_channels, kernel_size=3, padding=1, pool_size=2, pool=True, dilation=1) -> None:
         super(Block,self).__init__()
         self.pool = pool
-        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)
+        # Adjust padding for dilation to maintain output size
+        if dilation > 1:
+            padding = dilation * (kernel_size - 1) // 2
+        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size=kernel_size, padding=padding, dilation=dilation)
         self.ln = ConvLayerNorm(out_channels)
         if self.pool:
             self.pool = nn.MaxPool1d(pool_size)
@@ -31,15 +34,19 @@ class Block(nn.Module):
             x = self.pool(x)
         return x
 class TestModel(nn.Module):
-    def __init__(self, dropout=0.5):
+    def __init__(self, dropout=0.5, use_dilation=False):
         super(TestModel, self).__init__()
         self.blocks = []
-        self.blocks.append(Block(6,8))
-        for _ in range(1):
-            self.blocks.append(Block(8,8))
-            self.blocks.append(Block(8,8,pool=False))
 
-        self.blocks.append(Block(8,16,pool=False))
+        # Exponentially increasing dilation if enabled: 1, 2, 4, 8
+        dilations = [1, 2, 4, 8] if use_dilation else [1, 1, 1, 1]
+
+        self.blocks.append(Block(6, 8, dilation=dilations[0]))
+        for _ in range(1):
+            self.blocks.append(Block(8, 8, dilation=dilations[1]))
+            self.blocks.append(Block(8, 8, pool=False, dilation=dilations[2]))
+
+        self.blocks.append(Block(8, 16, pool=False, dilation=dilations[3]))
 
         self.blocks = nn.ModuleList(self.blocks)
         self.gap = nn.AdaptiveAvgPool1d(1)
