@@ -189,11 +189,19 @@ def main():
 
     # Training loop
     epoch = 0
-    best_val_loss = float('inf')
-    patience_counter = 0
     early_stopping_patience = hyperparameters['early_stopping_patience']
+    early_stopping_metric = hyperparameters.get('early_stopping_metric', 'loss')
 
-    print(f"\nStarting base model training (max {early_stopping_patience} epochs patience)...\n")
+    # Initialize best metric value based on metric type
+    if early_stopping_metric == 'f1':
+        best_val_metric = 0.0  # F1: higher is better
+    else:  # loss
+        best_val_metric = float('inf')  # Loss: lower is better
+
+    patience_counter = 0
+
+    print(f"\nStarting base model training (max {early_stopping_patience} epochs patience)...")
+    print(f"Early stopping metric: {early_stopping_metric}\n")
 
     while True:
         start_time = time()
@@ -212,17 +220,28 @@ def main():
         lossi['val_loss'].append(loss)
         lossi['val_f1'].append(f1)
 
-        # Early stopping based on validation loss
-        if loss < best_val_loss:
-            best_val_loss = loss
-            metrics['best_val_loss'] = best_val_loss
-            metrics['best_val_loss_epoch'] = epoch
+        # Early stopping based on selected metric
+        current_metric = f1 if early_stopping_metric == 'f1' else loss
+
+        # Check if this is the best model so far
+        is_best = False
+        if early_stopping_metric == 'f1':
+            is_best = current_metric > best_val_metric  # F1: higher is better
+        else:  # loss
+            is_best = current_metric < best_val_metric  # Loss: lower is better
+
+        if is_best:
+            best_val_metric = current_metric
             torch.save(model.state_dict(), f'{new_exp_dir}/best_base_model.pt')
             patience_counter = 0
         else:
             patience_counter += 1
 
-        # Track best F1
+        # Track best metrics (for logging, independent of early stopping)
+        if loss < (metrics['best_val_loss'] or float('inf')):
+            metrics['best_val_loss'] = loss
+            metrics['best_val_loss_epoch'] = epoch
+
         if f1 > (metrics['best_val_f1'] or 0):
             metrics['best_val_f1'] = f1
             metrics['best_val_f1_epoch'] = epoch

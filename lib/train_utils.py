@@ -3,6 +3,67 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, TensorDataset, ConcatDataset
 import torch
 from datetime import datetime
+
+def smooth_curve(values, weight=0.9):
+    """
+    Apply exponential moving average (EMA) smoothing to a training curve.
+
+    Args:
+        values: List of numeric values (may contain None for unused epochs)
+        weight: Smoothing factor (0-1). Higher = smoother curve.
+                Default 0.9 provides ~10 epoch smoothing window.
+
+    Returns:
+        List of smoothed values (same length as input, None values preserved)
+    """
+    if not values or len(values) == 0:
+        return values
+
+    smoothed = []
+    last_valid = None
+
+    for val in values:
+        if val is None:
+            smoothed.append(None)
+        else:
+            if last_valid is None:
+                # First valid value - no smoothing
+                smoothed_val = val
+            else:
+                # EMA: smoothed = weight * prev_smoothed + (1 - weight) * current
+                smoothed_val = weight * last_valid + (1 - weight) * val
+            smoothed.append(smoothed_val)
+            last_valid = smoothed_val
+
+    return smoothed
+
+def plot_curve_with_smoothing(ax, values, label, color, linestyle='-', weight=0.9, alpha_raw=0.3):
+    """
+    Plot both raw (transparent) and smoothed (prominent) versions of a curve.
+
+    Args:
+        ax: Matplotlib axis to plot on (if None, uses current axis via plt.gca())
+        values: List of values to plot
+        label: Label for the legend (applied to smoothed curve only)
+        color: Color for both curves
+        linestyle: Line style ('-', '--', etc.)
+        weight: EMA smoothing weight
+        alpha_raw: Transparency for raw data curve
+    """
+    if not values or len(values) == 0:
+        return
+
+    # Use current axis if not provided
+    if ax is None:
+        ax = plt.gca()
+
+    # Plot raw data with transparency
+    ax.plot(values, color=color, linestyle=linestyle, alpha=alpha_raw, linewidth=1)
+
+    # Plot smoothed data prominently
+    smoothed = smooth_curve(values, weight=weight)
+    ax.plot(smoothed, label=label, color=color, linestyle=linestyle, alpha=1.0, linewidth=2)
+
 def add_arguments(argparser):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
@@ -17,6 +78,7 @@ def add_arguments(argparser):
     argparser.add_argument('--prefix', type=str, default=timestamp, help='Experiment prefix/directory name')
     argparser.add_argument('--early_stopping_patience', type=int, default=40, help='Early stopping patience for base phase')
     argparser.add_argument('--early_stopping_patience_target', type=int, default=40, help='Early stopping patience for target phase')
+    argparser.add_argument('--early_stopping_metric', type=str, default='loss', choices=['loss', 'f1'], help='Metric to use for early stopping (loss or f1)')
     argparser.add_argument('--mode', type=str, default='full_fine_tuning', choices=['full_fine_tuning', 'target_only', 'target_only_fine_tuning'], help='Mode')
     argparser.add_argument('--lr', type=float, default=3e-4, help='Learning rate')
     argparser.add_argument('--target_data_pct', type=float, default=1.0, help='Percentage of target training data to use (0.0-1.0)')
@@ -34,10 +96,11 @@ def load_config(config_path):
 
 def plot_loss_and_f1(lossi, new_exp_dir, metrics, patience_counter):
     plt.figure(figsize=(7.2,4.48),dpi=300)
-    plt.plot(lossi['base train loss'], label='Train Loss (base)', color='b')
-    plt.plot(lossi['base val loss'], label='Val Loss (base)', color='b', linestyle='--')
-    plt.plot(lossi['target train loss'], label='Train Loss (target)', color='g')
-    plt.plot(lossi['target val loss'], label='Val Loss (target)', color='g', linestyle='--')
+    # Plot curves with smoothing
+    plot_curve_with_smoothing(None, lossi['base train loss'], 'Train Loss (base)', color='b')
+    plot_curve_with_smoothing(None, lossi['base val loss'], 'Val Loss (base)', color='b', linestyle='--')
+    plot_curve_with_smoothing(None, lossi['target train loss'], 'Train Loss (target)', color='g')
+    plot_curve_with_smoothing(None, lossi['target val loss'], 'Val Loss (target)', color='g', linestyle='--')
 
     if metrics['transition_epoch'] is not None:
         plt.axvline(x=metrics['transition_epoch'], color='r', linestyle='--', label='Phase Transition')
@@ -62,10 +125,11 @@ def plot_loss_and_f1(lossi, new_exp_dir, metrics, patience_counter):
     plt.close()
 
     plt.figure(figsize=(7.2,4.48),dpi=300)
-    plt.plot(lossi['base train f1'], label='Train f1 (base)', color='b')
-    plt.plot(lossi['base val f1'], label='Val f1 (base)', color='b', linestyle='--')
-    plt.plot(lossi['target train f1'], label='Train f1 (target)', color='g')
-    plt.plot(lossi['target val f1'], label='Val f1 (target)', color='g', linestyle='--')
+    # Plot curves with smoothing
+    plot_curve_with_smoothing(None, lossi['base train f1'], 'Train f1 (base)', color='b')
+    plot_curve_with_smoothing(None, lossi['base val f1'], 'Val f1 (base)', color='b', linestyle='--')
+    plot_curve_with_smoothing(None, lossi['target train f1'], 'Train f1 (target)', color='g')
+    plot_curve_with_smoothing(None, lossi['target val f1'], 'Val f1 (target)', color='g', linestyle='--')
 
     if metrics['transition_epoch'] is not None:
         plt.axvline(x=metrics['transition_epoch'], color='r', linestyle='--', label='Phase Transition')
@@ -91,8 +155,9 @@ def plot_loss_and_f1(lossi, new_exp_dir, metrics, patience_counter):
 def plot_base_training(lossi, new_exp_dir, metrics, patience_counter):
     """Plot training curves for base model training (no target phase)."""
     plt.figure(figsize=(7.2,4.48),dpi=300)
-    plt.plot(lossi['train_loss'], label='Train Loss', color='b')
-    plt.plot(lossi['val_loss'], label='Val Loss', color='b', linestyle='--')
+    # Plot curves with smoothing
+    plot_curve_with_smoothing(None, lossi['train_loss'], 'Train Loss', color='b')
+    plot_curve_with_smoothing(None, lossi['val_loss'], 'Val Loss', color='b', linestyle='--')
 
     if metrics['best_val_loss_epoch'] is not None and metrics['best_val_loss'] is not None:
         plt.axhline(y=metrics['best_val_loss'], color='b', linestyle='--', label='Best Val Loss', alpha=0.5)
@@ -108,8 +173,9 @@ def plot_base_training(lossi, new_exp_dir, metrics, patience_counter):
     plt.close()
 
     plt.figure(figsize=(7.2,4.48),dpi=300)
-    plt.plot(lossi['train_f1'], label='Train F1', color='b')
-    plt.plot(lossi['val_f1'], label='Val F1', color='b', linestyle='--')
+    # Plot curves with smoothing
+    plot_curve_with_smoothing(None, lossi['train_f1'], 'Train F1', color='b')
+    plot_curve_with_smoothing(None, lossi['val_f1'], 'Val F1', color='b', linestyle='--')
 
     if metrics['best_val_f1_epoch'] is not None and metrics['best_val_f1'] is not None:
         plt.axhline(y=metrics['best_val_f1'], color='b', linestyle='--', label='Best Val F1', alpha=0.5)
@@ -159,25 +225,29 @@ def save_metrics_and_losses(metrics, lossi, config, new_exp_dir):
 
 def plot_loss_and_f1_refactored(lossi, new_exp_dir):
     fig,ax = plt.subplots(nrows=2,ncols=1,figsize=(7.2,9),dpi=300)
+
+    # Plot loss curves with smoothing
     if len(lossi['base train loss']) > 0 and len(lossi['base val loss']) > 0:
-        ax[0].plot(lossi['base train loss'], label='Train (base)', color='b')
-        ax[0].plot(lossi['base val loss'], label='Val (base)', color='b', linestyle='--')
-    ax[0].plot(lossi['target train loss'], label='Train (target)', color='g')
-    ax[0].plot(lossi['target val loss'], label='Val (target)', color='g', linestyle='--')
+        plot_curve_with_smoothing(ax[0], lossi['base train loss'], 'Train (base)', color='b')
+        plot_curve_with_smoothing(ax[0], lossi['base val loss'], 'Val (base)', color='b', linestyle='--')
+    plot_curve_with_smoothing(ax[0], lossi['target train loss'], 'Train (target)', color='g')
+    plot_curve_with_smoothing(ax[0], lossi['target val loss'], 'Val (target)', color='g', linestyle='--')
     ax[0].set_xlabel('Epoch')
     ax[0].set_ylabel('Loss')
     ax[0].legend()
     ax[0].set_yscale('log')
 
+    # Plot F1 curves with smoothing
     if len(lossi['base train f1']) > 0 and len(lossi['base val f1']) > 0:
-        ax[1].plot(lossi['base train f1'], color='b')
-        ax[1].plot(lossi['base val f1'], color='b', linestyle='--')
+        plot_curve_with_smoothing(ax[1], lossi['base train f1'], 'Train (base)', color='b')
+        plot_curve_with_smoothing(ax[1], lossi['base val f1'], 'Val (base)', color='b', linestyle='--')
 
-    ax[1].plot(lossi['target train f1'], color='g')
-    ax[1].plot(lossi['target val f1'], color='g', linestyle='--')
+    plot_curve_with_smoothing(ax[1], lossi['target train f1'], 'Train (target)', color='g')
+    plot_curve_with_smoothing(ax[1], lossi['target val f1'], 'Val (target)', color='g', linestyle='--')
 
     ax[1].set_xlabel('Epoch')
     ax[1].set_ylabel('F1')
+    ax[1].legend()
 
     plt.savefig(f'{new_exp_dir}/loss_and_f1.jpg', bbox_inches='tight')
     plt.savefig(f'loss_and_f1.jpg', bbox_inches='tight')

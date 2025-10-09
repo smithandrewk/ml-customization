@@ -18,27 +18,31 @@ from datetime import datetime
 #   'all' - run all participants
 #   'ritwik' - run only ritwik fold
 #   ['ritwik', 'tonmoy'] - run only these specific participants
-RUN_FOLDS = 'will'  # Change this to control which folds to generate
+RUN_FOLDS = 'dennis'  # Change this to control which folds to generate
 
 # Grid search parameters
 GRID_PARAMS = {
     'batch_size': [32],
     'lr': [3e-4],
     'seed': list(range(1)),
-    'seed_finetune': list(range(6)),  # 5 different finetune runs
+    'seed_finetune': list(range(10, 16)),  # 5 different finetune runs
     'early_stopping_patience': [50],
-    'early_stopping_patience_target': [500],
+    'early_stopping_patience_target': [50],
+    'early_stopping_metric': ['f1','loss'],  # Options: 'f1' or 'loss'
     'mode': ['target_only'],
-    # 'target_data_pct': [0.01, 0.05, 0.125, 0.25, 0.5, 1.0],
     'target_data_pct': [1.0],
     'n_base_participants': [7],
 }
+
+# Will 2/5, not the best
+# Ashlin 0/5, I think the test set may be too small or totally unrelated
+# Dennis
 
 # Fixed parameters
 FIXED_PARAMS = {
     'model': 'test',
     'data_path': 'data/001_60s_window',
-    'participants': ['tonmoy', 'asfik', 'alsaad', 'anam', 'ejaz', 'iftakhar', 'unk1', 'ritwik','will'],
+    'participants': ['tonmoy', 'asfik', 'alsaad', 'anam', 'ejaz', 'iftakhar', 'unk1', 'ritwik','dennis'],
     'window_size': 3000,
     'use_augmentation': True,
     'jitter_std': 0.005,
@@ -93,6 +97,7 @@ def compute_base_model_hash(config):
         'batch_size': config['batch_size'],
         'lr': config['lr'],
         'early_stopping_patience': config['early_stopping_patience'],
+        'early_stopping_metric': config.get('early_stopping_metric', 'loss'),
         'use_augmentation': config['use_augmentation'],
         'participants': config['participants'],  # Full list affects which are base
         'seed': config.get('seed', 42),  # Different seeds = different initializations
@@ -127,6 +132,7 @@ def compute_finetune_experiment_hash(config):
         'batch_size': config['batch_size'],
         'lr': config['lr'],
         'early_stopping_patience_target': config['early_stopping_patience_target'],
+        'early_stopping_metric': config.get('early_stopping_metric', 'loss'),
         'use_augmentation': config['use_augmentation'],
         'participants': config['participants'],
         'seed_finetune': config.get('seed_finetune', config.get('seed', 42)),  # Use seed_finetune if available, else seed
