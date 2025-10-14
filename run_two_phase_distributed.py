@@ -18,6 +18,8 @@ import time
 from typing import List, Dict, Optional
 from datetime import datetime
 from collections import deque
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'lib'))
+from notify import send_discord_notification
 
 
 class LiveStatusMonitor:
@@ -482,12 +484,12 @@ Live Status Display (--live-status):
         """
     )
 
-    parser.add_argument('--cluster-config', required=False, default='cluster_config.json',
+    parser.add_argument('--cluster-config', required=False, default='configs/cluster_config.json',
                        help='Path to cluster configuration JSON')
     parser.add_argument('--base-jobs',
-                       help='Path to base training jobs JSON (default: base_training_jobs.json)')
+                       help='Path to base training jobs JSON (default: configs/base_training_jobs.json)')
     parser.add_argument('--finetune-jobs',
-                       help='Path to fine-tuning jobs JSON (default: finetune_jobs.json)')
+                       help='Path to fine-tuning jobs JSON (default: configs/finetune_jobs.json)')
     parser.add_argument('--skip-base-training', action='store_true',
                        help='Skip base training phase (use existing base models)')
     parser.add_argument('--skip-sync', action='store_true',
@@ -502,8 +504,8 @@ Live Status Display (--live-status):
     args = parser.parse_args()
 
     # Set default job file paths
-    base_jobs_path = args.base_jobs or 'base_training_jobs.json'
-    finetune_jobs_path = args.finetune_jobs or 'finetune_jobs.json'
+    base_jobs_path = args.base_jobs or 'configs/base_training_jobs.json'
+    finetune_jobs_path = args.finetune_jobs or 'configs/finetune_jobs.json'
 
     start_time = datetime.now()
 
@@ -518,6 +520,11 @@ Live Status Display (--live-status):
     print(f"Skip sync: {args.skip_sync}")
     print(f"{'='*80}\n")
 
+    # Send workflow start notification
+    send_discord_notification(
+        f"🏁 Starting two-phase distributed training workflow"
+    )
+
     # ========================================================================
     # PHASE 1: Train Base Models
     # ========================================================================
@@ -530,6 +537,13 @@ Live Status Display (--live-status):
         print("\n" + "="*80)
         print("PHASE 1: Training Base Models")
         print("="*80 + "\n")
+
+        # Send Phase 1 start notification
+        with open(base_jobs_path) as f:
+            base_jobs = json.load(f)
+        send_discord_notification(
+            f"🔵 Phase 1: Training {len(base_jobs)} base models"
+        )
 
         base_cmd = [
             "python3", "run_distributed_training.py",
@@ -557,9 +571,11 @@ Live Status Display (--live-status):
 
         if returncode != 0:
             print("\n✗ Base model training failed. Aborting.")
+            send_discord_notification("❌ Phase 1 failed: Base model training encountered errors")
             sys.exit(1)
 
         print("\n✓ All base models trained successfully!")
+        send_discord_notification("✅ Phase 1 complete: All base models trained successfully")
     else:
         print("\n⏭️  Skipping base model training (using existing base models)")
 
@@ -572,17 +588,21 @@ Live Status Display (--live-status):
         print("SYNC: Distributing Base Models to Cluster Nodes")
         print("="*80 + "\n")
 
+        send_discord_notification("🔄 Syncing base models to cluster nodes")
+
         sync_success = sync_base_models_to_cluster(args.cluster_config, verbose=not args.quiet)
 
         if not sync_success:
             print("\n⚠️  Base model sync had failures. Continuing anyway...")
             print("Fine-tuning may fail if base models are not available on worker nodes.")
+            send_discord_notification("⚠️ Sync completed with failures")
             response = input("Continue with fine-tuning? [y/N]: ")
             if response.lower() != 'y':
                 print("Aborting.")
                 sys.exit(1)
         else:
             print("\n✓ All base models synced successfully!")
+            send_discord_notification("✅ Sync complete: All base models distributed to cluster")
     else:
         print("\n⏭️  Skipping base model sync (assuming already synced)")
 
@@ -597,6 +617,13 @@ Live Status Display (--live-status):
     print("\n" + "="*80)
     print("PHASE 2: Fine-Tuning on Target Participants")
     print("="*80 + "\n")
+
+    # Send Phase 2 start notification
+    with open(finetune_jobs_path) as f:
+        finetune_jobs = json.load(f)
+    send_discord_notification(
+        f"🔵 Phase 2: Fine-tuning {len(finetune_jobs)} models on target participants"
+    )
 
     finetune_cmd = [
         "python3", "run_distributed_training.py",
@@ -624,9 +651,11 @@ Live Status Display (--live-status):
 
     if returncode != 0:
         print("\n✗ Fine-tuning failed.")
+        send_discord_notification("❌ Phase 2 failed: Fine-tuning encountered errors")
         sys.exit(1)
 
     print("\n✓ All fine-tuning jobs completed successfully!")
+    send_discord_notification("✅ Phase 2 complete: All fine-tuning jobs finished successfully")
 
     # ========================================================================
     # FINAL SUMMARY
@@ -658,6 +687,47 @@ Live Status Display (--live-status):
     print(f"{'='*80}\n")
 
     print("All experiments complete! 🎉")
+
+    # Send final completion notification
+    completion_msg = f"🎉 Two-phase training complete! Total time: {total_duration/60:.1f} minutes"
+
+    # Add time saved info if available
+    if not args.skip_base_training and os.path.exists('base_training_log.json'):
+        try:
+            with open('base_training_log.json', 'r') as f:
+                base_log = json.load(f)
+            with open(finetune_jobs_path, 'r') as f:
+                finetune_jobs_data = json.load(f)
+
+            # Calculate total time saved
+            base_model_durations = {}
+            for result in base_log['results']:
+                if result['success']:
+                    prefix = result['config']['prefix']
+                    duration = result['duration_seconds']
+                    base_model_durations[prefix] = duration
+
+            base_model_usage = {}
+            for job in finetune_jobs_data:
+                base_prefix = job.get('base_experiment_prefix')
+                if base_prefix:
+                    if base_prefix not in base_model_usage:
+                        base_model_usage[base_prefix] = 0
+                    base_model_usage[base_prefix] += 1
+
+            total_time_saved = 0
+            for base_prefix, num_reuses in base_model_usage.items():
+                if base_prefix in base_model_durations:
+                    duration = base_model_durations[base_prefix]
+                    time_saved = (num_reuses - 1) * duration
+                    total_time_saved += time_saved
+
+            if total_time_saved > 0:
+                completion_msg += f" | Saved {total_time_saved/60:.1f} min by sharing base models"
+        except Exception:
+            pass  # If calculation fails, just send the basic message
+
+    send_discord_notification(completion_msg)
 
 
 if __name__ == '__main__':

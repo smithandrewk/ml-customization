@@ -18,25 +18,25 @@ from datetime import datetime
 #   'all' - run all participants
 #   'ritwik' - run only ritwik fold
 #   ['ritwik', 'tonmoy'] - run only these specific participants
-RUN_FOLDS = 'tonmoy'  # Change this to control which folds to generate
+RUN_FOLDS = 'all'  # Change this to control which folds to generate
 
 # Grid search parameters
 GRID_PARAMS = {
     'batch_size': [32],
     'lr': [3e-4],
-    'seed': list(range(1)),
+    'seed': list(range(3)),
     'seed_finetune': list(range(3)),
     'early_stopping_patience': [50],
-    'early_stopping_patience_target': [100, 200],
+    'early_stopping_patience_target': [50],
     'early_stopping_metric': ['f1'],  # Options: 'f1' or 'loss'
-    'use_dilation': [True, False],
-    'base_channels': [8, 16, 32],  # Number of channels: 8, 16, 32, etc.
-    'num_blocks': [4, 6, 8],  # Number of convolutional blocks (depth)
-    'use_residual': [True, False],  # Enable residual connections
+    'use_dilation': [True],
+    'base_channels': [8,16,32,64],  # Number of channels: 8, 16, 32, etc.
+    'num_blocks': [6,8,10,12],  # Number of convolutional blocks (depth)
+    'use_residual': [False,True],  # Enable residual connections
     'dropout': [0.0],  # 0.0 = no dropout, 0.5 = standard dropout
-    'mode': ['target_only'],
-    'target_data_pct': [1.0],
-    'n_base_participants': [7],
+    'mode': ['full_fine_tuning','target_only','target_only_fine_tuning'],
+    'target_data_pct': [.01,.125,.25,.5,1],
+    'n_base_participants': ['all'],
 }
 
 # Will 2/5, not the best
@@ -47,8 +47,8 @@ GRID_PARAMS = {
 # Fixed parameters
 FIXED_PARAMS = {
     'model': 'test',
-    'data_path': 'data/001_60s_window',
-    'participants': ['tonmoy', 'asfik', 'alsaad', 'anam', 'ejaz', 'iftakhar', 'unk1', 'ritwik','dennis','tj'],
+    'data_path': 'data/002_60s_windowsplit',
+    'participants': ['tonmoy', 'asfik', 'alsaad', 'anam', 'ejaz', 'iftakhar', 'unk1', 'ritwik','twp5'],
     'window_size': 3000,
     'use_augmentation': True,
     'jitter_std': 0.005,
@@ -151,6 +151,7 @@ def compute_finetune_experiment_hash(config):
         'early_stopping_metric': config.get('early_stopping_metric', 'loss'),
         'use_augmentation': config['use_augmentation'],
         'participants': config['participants'],
+        'seed': config.get('seed', 42),  # Base model seed - different base models need different dirs
         'seed_finetune': config.get('seed_finetune', config.get('seed', 42)),  # Use seed_finetune if available, else seed
     }
 
@@ -347,11 +348,11 @@ def main():
     base_jobs, finetune_jobs = generate_two_phase_jobs()
 
     # Save base training jobs
-    with open('base_training_jobs.json', 'w') as f:
+    with open('configs/base_training_jobs.json', 'w') as f:
         json.dump(base_jobs, f, indent=2)
 
     # Save fine-tuning jobs
-    with open('finetune_jobs.json', 'w') as f:
+    with open('configs/finetune_jobs.json', 'w') as f:
         json.dump(finetune_jobs, f, indent=2)
 
     # Print summary
@@ -362,8 +363,8 @@ def main():
     print(f"Fine-tuning jobs: {len(finetune_jobs)}")
     print(f"Total jobs: {len(base_jobs) + len(finetune_jobs)}")
     print(f"\nFiles created:")
-    print(f"  - base_training_jobs.json ({len(base_jobs)} jobs)")
-    print(f"  - finetune_jobs.json ({len(finetune_jobs)} jobs)")
+    print(f"  - configs/base_training_jobs.json ({len(base_jobs)} jobs)")
+    print(f"  - configs/finetune_jobs.json ({len(finetune_jobs)} jobs)")
     print(f"{'='*80}\n")
 
     # Print example breakdown
@@ -386,21 +387,21 @@ def main():
     print("Next steps:")
     print("1. Train base models:")
     print("   python3 run_distributed_training.py \\")
-    print("       --cluster-config cluster_config.json \\")
-    print("       --jobs-config base_training_jobs.json \\")
+    print("       --cluster-config configs/cluster_config.json \\")
+    print("       --jobs-config configs/base_training_jobs.json \\")
     print("       --script-path train_base.py")
     print()
     print("2. Fine-tune on targets:")
     print("   python3 run_distributed_training.py \\")
-    print("       --cluster-config cluster_config.json \\")
-    print("       --jobs-config finetune_jobs.json \\")
+    print("       --cluster-config configs/cluster_config.json \\")
+    print("       --jobs-config configs/finetune_jobs.json \\")
     print("       --script-path train_finetune.py")
     print()
     print("OR run both phases automatically:")
     print("   python3 run_two_phase_distributed.py \\")
-    print("       --cluster-config cluster_config.json \\")
-    print("       --base-jobs base_training_jobs.json \\")
-    print("       --finetune-jobs finetune_jobs.json \\")
+    print("       --cluster-config configs/cluster_config.json \\")
+    print("       --base-jobs configs/base_training_jobs.json \\")
+    print("       --finetune-jobs configs/finetune_jobs.json \\")
     print("       --live-status  # Shows live GPU status and job activity")
 
 

@@ -16,6 +16,9 @@ import threading
 from queue import Queue
 from dataclasses import dataclass, asdict
 import copy
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'lib'))
+from notify import send_discord_notification
 
 
 def hash_config(config: dict, exclude_keys: set = None) -> str:
@@ -627,6 +630,11 @@ def run_distributed_jobs(
     print(f"Start time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*80}\n")
 
+    # Send start notification
+    send_discord_notification(
+        f"🚀 Starting distributed training: {len(jobs)} jobs across {len(gpus)} GPUs"
+    )
+
     # Setup tmux sessions on each server
     print("Setting up tmux sessions...")
     pane_mapping = setup_tmux_sessions(gpus, tmux_session)
@@ -650,11 +658,27 @@ def run_distributed_jobs(
 
     # Monitor progress
     total_jobs = len(jobs)
+    milestones_sent = {25: False, 50: False, 75: False}
+    progress_start_time = time.time()
+
     if verbose:
         while not job_queue.empty():
             remaining = job_queue.qsize()
             completed = total_jobs - remaining
             print(f"\rProgress: {completed}/{total_jobs} jobs completed", end='', flush=True)
+
+            # Check for milestone notifications
+            if total_jobs > 0:
+                progress_pct = (completed / total_jobs) * 100
+                elapsed_time = time.time() - progress_start_time
+
+                for milestone in [25, 50, 75]:
+                    if progress_pct >= milestone and not milestones_sent[milestone]:
+                        send_discord_notification(
+                            f"⚙️ {milestone}% complete ({completed}/{total_jobs} jobs) - {elapsed_time/60:.1f} min elapsed"
+                        )
+                        milestones_sent[milestone] = True
+
             time.sleep(2)
         print()  # New line after progress
 
@@ -685,6 +709,17 @@ def run_distributed_jobs(
     avg_gpu_utilization = (total_gpu_time / (total_duration * len(gpus))) * 100 if total_duration > 0 else 0
     print(f"GPU utilization: {avg_gpu_utilization:.1f}%")
     print(f"{'='*80}")
+
+    # Send completion notification
+    failed = len(results) - successful
+    if failed == 0:
+        send_discord_notification(
+            f"✅ All jobs complete! {successful}/{len(jobs)} successful in {total_duration/60:.1f} minutes"
+        )
+    else:
+        send_discord_notification(
+            f"⚠️ Jobs complete with {failed} failures. {successful}/{len(jobs)} successful in {total_duration/60:.1f} minutes"
+        )
 
     # Print tmux connection info
     print(f"\nTmux Sessions:")
@@ -783,9 +818,9 @@ Example usage:
         """
     )
 
-    parser.add_argument('--cluster-config', required=False, default='cluster_config.json',
+    parser.add_argument('--cluster-config', required=False, default='configs/cluster_config.json',
                        help='Path to JSON file with cluster configuration')
-    parser.add_argument('--jobs-config', required=False, default='jobs_config.json',
+    parser.add_argument('--jobs-config', required=False, default='configs/jobs_config.json',
                        help='Path to JSON file with job configurations')
     parser.add_argument('--script-path', default='train.py',
                        help='Path to training script relative to ~/ml-customization')

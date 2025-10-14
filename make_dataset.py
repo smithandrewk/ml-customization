@@ -79,77 +79,124 @@ for participant in config['participants']:
         # Store session data for summary
         session_data[project_name] = sessions
 
-        # Generate train/val/test splits for all participants
-        # train.py will decide how to use them based on target vs base
-        is_target_participant = True  # All participants get 3-way split
-        
-        if is_target_participant:
-            # 3-way split for target participants: 60% train, 20% val, 20% test
-            train_sessions, temp_sessions = train_test_split(
-                sessions, 
-                test_size=0.4,  # 40% for val+test
-                random_state=42
-            )
-            val_sessions, test_sessions = train_test_split(
-                temp_sessions,
-                test_size=0.5,  # 50% of 40% = 20% total for test
-                random_state=42
-            )
-            # Store 3-way split for target participants
-            train_test_splits[project_name] = (train_sessions, val_sessions, test_sessions)
-            print(f"Target participant split - Train: {len(train_sessions)}, Val: {len(val_sessions)}, Test: {len(test_sessions)}")
-        else:
-            # 2-way split for base participants: train/test (test serves as validation)
-            train_sessions, test_sessions = train_test_split(
-                sessions, 
-                test_size=config['dataset']['test_size'], 
-                random_state=42
-            )
-            # Store 2-way split for base participants (val = test)
-            train_test_splits[project_name] = (train_sessions, test_sessions, test_sessions)
-            print(f"Base participant split - Train: {len(train_sessions)}, Test/Val: {len(test_sessions)}")
-        
-        # Create windowed datasets for training data
-        X, y = make_windowed_dataset_from_sessions(
-            train_sessions, 
-            config['dataset']['window_size'], 
-            config['dataset']['window_stride'], 
-            raw_dataset_path, 
-            config['dataset']['labeling'],
-            config.get('sensors')
-        )
-        participant_X_train.append(X)
-        participant_y_train.append(y)
+        # Check splitting strategy
+        split_by_windows = config['dataset'].get('split_by_windows', False)
 
-        # Create windowed datasets for validation data (only for target participants)
-        if is_target_participant and len(train_test_splits[project_name]) == 3:
-            val_sessions = train_test_splits[project_name][1]  # Get validation sessions
-            X_val, y_val = make_windowed_dataset_from_sessions(
-                val_sessions, 
-                config['dataset']['window_size'], 
-                config['dataset']['window_stride'], 
-                raw_dataset_path, 
+        if split_by_windows:
+            # NEW APPROACH: Create all windows first, then split at window level
+            print(f"Using window-level splitting (temporal leakage possible)")
+
+            X_all, y_all = make_windowed_dataset_from_sessions(
+                sessions,  # All sessions together
+                config['dataset']['window_size'],
+                config['dataset']['window_stride'],
+                raw_dataset_path,
                 config['dataset']['labeling'],
                 config.get('sensors')
             )
+
+            # 3-way split: 60% train, 20% val, 20% test
+            X_train, X_temp, y_train, y_temp = train_test_split(
+                X_all, y_all,
+                test_size=0.4,  # 40% for val+test
+                random_state=42
+            )
+            X_val, X_test, y_val, y_test = train_test_split(
+                X_temp, y_temp,
+                test_size=0.5,  # 50% of 40% = 20% total for test
+                random_state=42
+            )
+
+            # Append to participant lists
+            participant_X_train.append(X_train)
+            participant_y_train.append(y_train)
+
             if 'participant_X_val' not in locals():
                 participant_X_val = []
                 participant_y_val = []
             participant_X_val.append(X_val)
             participant_y_val.append(y_val)
 
-        # Create windowed datasets for test data
-        test_sessions_for_data = train_test_splits[project_name][-1]  # Last element is always test
-        X, y = make_windowed_dataset_from_sessions(
-            test_sessions_for_data, 
-            config['dataset']['window_size'], 
-            config['dataset']['window_stride'], 
-            raw_dataset_path, 
-            config['dataset']['labeling'],
-            config.get('sensors')
-        )
-        participant_X_test.append(X)
-        participant_y_test.append(y)
+            participant_X_test.append(X_test)
+            participant_y_test.append(y_test)
+
+            print(f"Window-level split - Train: {len(X_train)}, Val: {len(X_val)}, Test: {len(X_test)}")
+
+        else:
+            # CURRENT APPROACH: Split sessions first, then create windows (prevents temporal leakage)
+            print(f"Using session-level splitting (prevents temporal leakage)")
+
+            # Generate train/val/test splits for all participants
+            # train.py will decide how to use them based on target vs base
+            is_target_participant = True  # All participants get 3-way split
+
+            if is_target_participant:
+                # 3-way split for target participants: 60% train, 20% val, 20% test
+                train_sessions, temp_sessions = train_test_split(
+                    sessions,
+                    test_size=0.4,  # 40% for val+test
+                    random_state=42
+                )
+                val_sessions, test_sessions = train_test_split(
+                    temp_sessions,
+                    test_size=0.5,  # 50% of 40% = 20% total for test
+                    random_state=42
+                )
+                # Store 3-way split for target participants
+                train_test_splits[project_name] = (train_sessions, val_sessions, test_sessions)
+                print(f"Target participant split - Train: {len(train_sessions)}, Val: {len(val_sessions)}, Test: {len(test_sessions)}")
+            else:
+                # 2-way split for base participants: train/test (test serves as validation)
+                train_sessions, test_sessions = train_test_split(
+                    sessions,
+                    test_size=config['dataset']['test_size'],
+                    random_state=42
+                )
+                # Store 2-way split for base participants (val = test)
+                train_test_splits[project_name] = (train_sessions, test_sessions, test_sessions)
+                print(f"Base participant split - Train: {len(train_sessions)}, Test/Val: {len(test_sessions)}")
+
+            # Create windowed datasets for training data
+            X, y = make_windowed_dataset_from_sessions(
+                train_sessions,
+                config['dataset']['window_size'],
+                config['dataset']['window_stride'],
+                raw_dataset_path,
+                config['dataset']['labeling'],
+                config.get('sensors')
+            )
+            participant_X_train.append(X)
+            participant_y_train.append(y)
+
+            # Create windowed datasets for validation data (only for target participants)
+            if is_target_participant and len(train_test_splits[project_name]) == 3:
+                val_sessions = train_test_splits[project_name][1]  # Get validation sessions
+                X_val, y_val = make_windowed_dataset_from_sessions(
+                    val_sessions,
+                    config['dataset']['window_size'],
+                    config['dataset']['window_stride'],
+                    raw_dataset_path,
+                    config['dataset']['labeling'],
+                    config.get('sensors')
+                )
+                if 'participant_X_val' not in locals():
+                    participant_X_val = []
+                    participant_y_val = []
+                participant_X_val.append(X_val)
+                participant_y_val.append(y_val)
+
+            # Create windowed datasets for test data
+            test_sessions_for_data = train_test_splits[project_name][-1]  # Last element is always test
+            X, y = make_windowed_dataset_from_sessions(
+                test_sessions_for_data,
+                config['dataset']['window_size'],
+                config['dataset']['window_stride'],
+                raw_dataset_path,
+                config['dataset']['labeling'],
+                config.get('sensors')
+            )
+            participant_X_test.append(X)
+            participant_y_test.append(y)
 
     # Concatenate all projects for this participant
     if participant_X_train:  # Check if participant has any data
