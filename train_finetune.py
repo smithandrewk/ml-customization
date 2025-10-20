@@ -6,7 +6,6 @@ This script loads a base model trained with train_base.py and fine-tunes it
 on a specific target participant's data.
 """
 
-from turtle import pos
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset, ConcatDataset
