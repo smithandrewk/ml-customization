@@ -16,6 +16,16 @@ sensors:
   use_accelerometer: true   # Include accelerometer data (accel_x, accel_y, accel_z)
   use_gyroscope: true       # Include gyroscope data (gyro_x, gyro_y, gyro_z)
 
-# Participants Configuration
+# Participants Configuration (n=11)
 participants:
-  - "kerry"
+  - "twp5"
+  - "tonmoy"
+  - "asfik"
+  - "alsaad"
+  - "anam"
+  - "ejaz"
+  - "iftakhar"
+  - "unk1"
+  - "ritwik"
+  - "dennis"
+  - "karen_redo"

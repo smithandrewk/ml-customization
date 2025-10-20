@@ -6,6 +6,7 @@ This script loads a base model trained with train_base.py and fine-tunes it
 on a specific target participant's data.
 """
 
+from turtle import pos
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset, ConcatDataset
@@ -51,6 +52,7 @@ def main():
     base_experiment_prefix = hyperparameters.get('base_experiment_prefix')
     mode = hyperparameters['mode']
     target_data_pct = hyperparameters['target_data_pct']
+    pos_weight = hyperparameters['pos_weight']
 
     participants = hyperparameters['participants'].copy()
     target_participant = participants[fold]
@@ -148,7 +150,7 @@ def main():
         print(f'Using model: {model.__class__.__name__}')
         print(f'Total model parameters: {sum(p.numel() for p in model.parameters())}')
 
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.BCEWithLogitsLoss(pos_weight=torch.tensor(pos_weight).to(device))
     optimizer = torch.optim.AdamW(model.parameters(), lr=hyperparameters['lr'])
 
     print(f'Using model: {model.__class__.__name__}')

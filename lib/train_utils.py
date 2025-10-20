@@ -93,6 +93,7 @@ def add_arguments(argparser):
     argparser.add_argument('--n_base_participants', type=str, default='all', help='Number of base participants to use (integer or "all")')
     argparser.add_argument('--seed', type=int, default=42, help='Random seed for base model training')
     argparser.add_argument('--seed_finetune', type=int, default=None, help='Random seed for fine-tuning (if not set, uses --seed)')
+    argparser.add_argument('--pos_weight', type=float, default=1, help='Positive class weight for BCE loss')
     return argparser
 
 def load_config(config_path):
