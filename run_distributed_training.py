@@ -417,7 +417,7 @@ class GPUWorker(threading.Thread):
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                     text=True,
-                    timeout=7200  # 2 hour timeout per job
+                    timeout=None  # No timeout - let jobs run as long as needed
                 )
 
                 # Capture output from tmux pane buffer
@@ -441,7 +441,7 @@ class GPUWorker(threading.Thread):
 
                 return job_exit_code, stdout, result.stderr
             except subprocess.TimeoutExpired:
-                return -1, "", "Job timeout (2 hours exceeded)"
+                return -1, "", "Job timeout exceeded"
             except Exception as e:
                 return -1, "", str(e)
 
@@ -474,7 +474,7 @@ class GPUWorker(threading.Thread):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                timeout=7200  # 2 hour timeout per job
+                timeout=None  # No timeout - let jobs run as long as needed
             )
 
             # After job completes, capture the output from tmux pane buffer

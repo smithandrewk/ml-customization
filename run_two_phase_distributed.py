@@ -565,7 +565,7 @@ Live Status Display (--live-status):
         returncode, stdout, stderr = run_command(
             base_cmd,
             "Phase 1: Base Model Training",
-            timeout=7200,  # 2 hour timeout
+            timeout=None,  # No timeout - let training run as long as needed
             live_monitor=live_monitor
         )
 
@@ -645,7 +645,7 @@ Live Status Display (--live-status):
     returncode, stdout, stderr = run_command(
         finetune_cmd,
         "Phase 2: Fine-Tuning",
-        timeout=14400,  # 4 hour timeout
+        timeout=None,  # No timeout - let training run as long as needed
         live_monitor=live_monitor
     )
 

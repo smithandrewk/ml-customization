@@ -18,33 +18,33 @@ from datetime import datetime
 #   'all' - run all participants
 #   'ritwik' - run only ritwik fold
 #   ['ritwik', 'tonmoy'] - run only these specific participants
-RUN_FOLDS = 'kerry'  # Change this to control which folds to generate
+RUN_FOLDS = 'all'  # Change this to control which folds to generate
 
 # Grid search parameters
 GRID_PARAMS = {
     'batch_size': [32],
     'lr': [3e-4],
     'seed': list(range(1)),
-    'seed_finetune': list(range(1)),
+    'seed_finetune': list(range(3)),
     'early_stopping_patience': [50],
-    'early_stopping_patience_target': [100],
-    'early_stopping_metric': ['loss'],  # Options: 'f1' or 'loss'
+    'early_stopping_patience_target': [500],
+    'early_stopping_metric': ['f1'],  # Options: 'f1' or 'loss'
     'use_dilation': [True],
-    'base_channels': [8],  # Number of channels: 8, 16, 32, etc.
+    'base_channels': [8,16,32,64],  # Number of channels: 8, 16, 32, etc.
     'num_blocks': [4],  # Number of convolutional blocks (depth)
     'use_residual': [False],  # Enable residual connections
-    'dropout': [0.0],  # 0.0 = no dropout, 0.5 = standard dropout
-    'mode': ['target_only'],
-    'target_data_pct': [1],
+    'dropout': [0.5],  # 0.0 = no dropout, 0.5 = standard dropout
+    'mode': ['target_only_fine_tuning','full_fine_tuning','target_only'],
+    'target_data_pct': [.05,.125,.25,.5,1],
     'n_base_participants': ['all'],
-    'pos_weight': [2,5,10]
+    'pos_weight': [1]
 }
 
 # Fixed parameters
 FIXED_PARAMS = {
     'model': 'test',
-    'data_path': 'data/003_kerry',
-    'participants': ['kerry'],
+    'data_path': 'data/002_60s_windowsplit',
+    'participants': ['alsaad','anam','asfik','dennis','ejaz','iftakhar','karen_redo','kerry','ritwik','tonmoy','twp5','unk1','will'],
     'window_size': 3000,
     'use_augmentation': True,
     'jitter_std': 0.005,
@@ -148,7 +148,7 @@ def compute_finetune_experiment_hash(config):
         'use_augmentation': config['use_augmentation'],
         'participants': config['participants'],
         'seed': config.get('seed', 42),  # Base model seed - different base models need different dirs
-        'seed_finetune': config.get('seed_fietune', config.get('seed', 42)),  # Use seed_finetune if available, else seed
+        'seed_finetune': config.get('seed_finetune', config.get('seed', 42)),  # Use seed_finetune if available, else seed
         'pos_weight': config.get('pos_weight', 1),
     }
 
