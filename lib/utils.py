@@ -311,6 +311,7 @@ def make_windowed_dataset_from_sessions(sessions, window_size, window_stride, ra
 
     for session in sessions:
         session_name = session['session_name']
+        raw_dataset_path = session['raw_dataset_path']
         start_ns = session.get('start_ns')
         stop_ns = session.get('stop_ns')
         bouts = [b for b in session['bouts'] if b['label'] == labeling]

@@ -27,17 +27,17 @@ GRID_PARAMS = {
     'seed': list(range(1)),
     'seed_finetune': list(range(3)),
     'early_stopping_patience': [50],
-    'early_stopping_patience_target': [500],
+    'early_stopping_patience_target': [200],
     'early_stopping_metric': ['f1'],  # Options: 'f1' or 'loss'
     'use_dilation': [True],
-    'base_channels': [8,16,32,64],  # Number of channels: 8, 16, 32, etc.
+    'base_channels': [64],  # Number of channels: 8, 16, 32, etc.
     'num_blocks': [4],  # Number of convolutional blocks (depth)
     'use_residual': [False],  # Enable residual connections
     'dropout': [0.5],  # 0.0 = no dropout, 0.5 = standard dropout
-    'mode': ['target_only_fine_tuning','full_fine_tuning','target_only'],
-    'target_data_pct': [.05,.125,.25,.5,1],
+    'mode': ['target_only_fine_tuning','target_only'],
+    'target_data_pct': [1],
     'n_base_participants': ['all'],
-    'pos_weight': [1]
+    'pos_weight': [2,5,10,15]
 }
 
 # Fixed parameters

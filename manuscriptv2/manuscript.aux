@@ -1,0 +1,54 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyperFirstAtBeginDocument{\AtBeginDocument}
+\HyperFirstAtBeginDocument{\ifx\hyper@anchor\@undefined
+\global\let\oldcontentsline\contentsline
+\gdef\contentsline#1#2#3#4{\oldcontentsline{#1}{#2}{#3}}
+\global\let\oldnewlabel\newlabel
+\gdef\newlabel#1#2{\newlabelxx{#1}#2}
+\gdef\newlabelxx#1#2#3#4#5#6{\oldnewlabel{#1}{{#2}{#3}}}
+\AtEndDocument{\ifx\hyper@anchor\@undefined
+\let\contentsline\oldcontentsline
+\let\newlabel\oldnewlabel
+\fi}
+\fi}
+\global\let\hyper@last\relax 
+\gdef\HyperFirstAtBeginDocument#1{#1}
+\providecommand\HyField@AuxAddToFields[1]{}
+\providecommand\HyField@AuxAddToCoFields[2]{}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}Methods}{2}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}Data Collection and Processing}{2}{subsection.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Model Architecture}{2}{subsection.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Training Procedures}{3}{subsection.2.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.4}Experimental Design}{3}{subsection.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.5}Evaluation Metrics}{3}{subsection.2.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.6}Feature Space Visualization}{4}{subsection.2.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3}Results}{4}{section.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Dataset Description}{4}{subsection.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}Population Models Exhibit Poor Generalization to Individuals}{4}{subsection.3.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces \textbf  {Base model test performance on individuals outside training distribution.} (Left) Overall distribution of test F1 scores for base population models on out-of-distribution individuals. (Right) Test F1 scores across individuals, showing high variability and reduced performance.}}{5}{figure.1}\protected@file@percent }
+\newlabel{fig:base_test}{{1}{5}{\textbf {Base model test performance on individuals outside training distribution.} (Left) Overall distribution of test F1 scores for base population models on out-of-distribution individuals. (Right) Test F1 scores across individuals, showing high variability and reduced performance}{figure.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Fine-Tuning Achieves Robust Personalization with Full Target Data}{5}{subsection.3.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces \textbf  {Fine-tuning performance comparison.} (A) Test F1 score distributions comparing base and fine-tuned models across all participants. (B) Absolute F1 improvement distribution showing consistent gains. (C) Relative improvement as percentage of base performance. (D) Improvement relative to room for improvement, showing that fine-tuning captures substantial fraction of theoretically achievable gains.}}{6}{figure.2}\protected@file@percent }
+\newlabel{fig:fine_tuning}{{2}{6}{\textbf {Fine-tuning performance comparison.} (A) Test F1 score distributions comparing base and fine-tuned models across all participants. (B) Absolute F1 improvement distribution showing consistent gains. (C) Relative improvement as percentage of base performance. (D) Improvement relative to room for improvement, showing that fine-tuning captures substantial fraction of theoretically achievable gains}{figure.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4}Fine-Tuning Outperforms Training From Scratch}{6}{subsection.3.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces \textbf  {Per-participant performance metrics comparing base and fine-tuned models.} F1 scores, precision, recall, and improvement metrics across all LOPO cross-validation folds, showing consistent gains from personalization.}}{7}{table.1}\protected@file@percent }
+\newlabel{tab:performance}{{1}{7}{\textbf {Per-participant performance metrics comparing base and fine-tuned models.} F1 scores, precision, recall, and improvement metrics across all LOPO cross-validation folds, showing consistent gains from personalization}{table.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces \textbf  {Comprehensive performance comparison: three training approaches.} Test F1 scores for base model, target-only model, and fine-tuned model across all individuals, highlighting the superiority of fine-tuning. Even with 100\% of individual data available to both approaches, fine-tuned models (median F1 $\approx $ 0.88) significantly outperform target-only models (median F1 $\approx $ 0.87) with mean improvement of 0.014 F1 points (p < 0.001, Wilcoxon signed-rank test), demonstrating that population pretraining provides benefits beyond data efficiency.}}{7}{figure.3}\protected@file@percent }
+\newlabel{fig:three_way_comparison}{{3}{7}{\textbf {Comprehensive performance comparison: three training approaches.} Test F1 scores for base model, target-only model, and fine-tuned model across all individuals, highlighting the superiority of fine-tuning. Even with 100\% of individual data available to both approaches, fine-tuned models (median F1 $\approx $ 0.88) significantly outperform target-only models (median F1 $\approx $ 0.87) with mean improvement of 0.014 F1 points (p < 0.001, Wilcoxon signed-rank test), demonstrating that population pretraining provides benefits beyond data efficiency}{figure.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.5}Transfer Learning Excels in Low-Data Regimes}{7}{subsection.3.5}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces \textbf  {Low-data regime performance comparison.} Test F1 scores for target-only and fine-tuned models across varying fractions of target data (1\%, 5\%, 12.5\%, 25\%, 50\%, 100\%), demonstrating the advantage of fine-tuning in data-scarce scenarios. The most extreme divergence occurs at 1\% data, where fine-tuning maintains median F1 of 0.730\nobreakspace  {}while target-only training collapses to 0.494, showing an absolute improvement of 0.236\nobreakspace  {}F1 points.}}{8}{figure.4}\protected@file@percent }
+\newlabel{fig:low_data_comparison}{{4}{8}{\textbf {Low-data regime performance comparison.} Test F1 scores for target-only and fine-tuned models across varying fractions of target data (1\%, 5\%, 12.5\%, 25\%, 50\%, 100\%), demonstrating the advantage of fine-tuning in data-scarce scenarios. The most extreme divergence occurs at 1\% data, where fine-tuning maintains median F1 of \onePctFinetuneMedian ~while target-only training collapses to \onePctTargetOnlyMedian , showing an absolute improvement of \onePctAbsoluteImprovement ~F1 points}{figure.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.6}Learned Feature Representations Balance Smoking Detection with Individual Variability}{9}{subsection.3.6}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces \textbf  {Feature space visualization reveals dual structure of learned representations.} t-SNE projection of features extracted from a representative fine-tuned model applied to all participants' test sets. (A) Features colored by smoking label show clear separation between smoking and non-smoking windows, demonstrating that the model learned generalizable smoking patterns. (B) Features colored by participant reveal individual-specific clustering, illustrating inter-participant variability in feature space. This dual structure—shared smoking representations with participant-specific organization—explains why population pretraining provides useful initialization while personalization remains necessary for robust individual performance. Each point represents a 60-second window from held-out test data.}}{10}{figure.5}\protected@file@percent }
+\newlabel{fig:tsne}{{5}{10}{\textbf {Feature space visualization reveals dual structure of learned representations.} t-SNE projection of features extracted from a representative fine-tuned model applied to all participants' test sets. (A) Features colored by smoking label show clear separation between smoking and non-smoking windows, demonstrating that the model learned generalizable smoking patterns. (B) Features colored by participant reveal individual-specific clustering, illustrating inter-participant variability in feature space. This dual structure—shared smoking representations with participant-specific organization—explains why population pretraining provides useful initialization while personalization remains necessary for robust individual performance. Each point represents a 60-second window from held-out test data}{figure.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Discussion}{10}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Implications for Deployment}{10}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Sources of Individual Variability}{11}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Comparison with Alternative Approaches}{11}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Limitations and Future Directions}{11}{subsection.4.4}\protected@file@percent }
+\bibstyle{unsrt}
+\bibdata{references}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Broader Impact}{12}{subsection.4.5}\protected@file@percent }
+\gdef \@abspage@last{12}

@@ -322,7 +322,33 @@ def compute_loss_and_f1(model, dataloader, criterion, device):
     y_true = torch.cat(y_true).cpu()
     y_pred = torch.cat(y_pred).cpu()
     f1 = f1_score(y_true, y_pred, average='macro')
+
     return total_loss / count, float(f1)
+
+def compute_loss_and_f1_and_precision_and_recall(model, dataloader, criterion, device):
+    model.eval()
+    total_loss = 0.0
+    count = 0
+    y_true = []
+    y_pred = []
+    with torch.no_grad():
+        for Xi, yi in dataloader:
+            Xi = Xi.to(device)
+            yi = yi.to(device).float()
+            logits = model(Xi).squeeze(-1)
+            loss = criterion(logits, yi)
+            total_loss += loss.item() * Xi.size(0)
+            count += Xi.size(0)
+            y_true.append(yi.cpu())
+            y_pred.append(logits.sigmoid().round().cpu())
+    y_true = torch.cat(y_true).cpu()
+    y_pred = torch.cat(y_pred).cpu()
+    f1 = f1_score(y_true, y_pred, average='macro')
+    from sklearn.metrics import precision_score, recall_score
+    precision = precision_score(y_true, y_pred, average='macro', zero_division=0)
+    recall = recall_score(y_true, y_pred, average='macro', zero_division=0)
+
+    return total_loss / count, float(f1), float(precision), float(recall)
 
 def optimize_model_compute_loss_and_f1(model, dataloader, optimizer, criterion, device, augmenter=None):
     model.train()
@@ -488,7 +514,7 @@ def plot_hyperparameter_counts(df, hyperparameters_to_plot, max_combinations=10)
         )
         
         # Create heatmap
-        sns.heatmap(pivot_df, annot=True, cmap='Blues', ax=ax)
+        sns.heatmap(pivot_df, annot=pivot_df.astype(str), cmap='Blues', ax=ax, fmt='s')
         ax.set_title(f'{param1} vs {param2} Counts')
     
     # Hide unused subplots
@@ -516,41 +542,83 @@ def load_experiments_from_dir(experiments_dir, device='cuda'):
             losses = json.load(open(f'{experiments_dir}/{experiment}/{run}/losses.json'))
             hyperparameters = json.load(open(f'{experiments_dir}/{experiment}/{run}/hyperparameters.json'))
 
+
             if experiment.startswith('base'):
-                hyperparameters['mode'] = 'base'
-                best_base_model_path = f'{experiments_dir}/{experiment}/{run}/best_base_model.pt'
-                from lib.models import TestModel
-                target_participant = hyperparameters['target_participant']
-                data_path = hyperparameters['data_path']
-                batch_size = hyperparameters['batch_size']
-                criterion = nn.BCEWithLogitsLoss()
+                if 'test_f1' in metrics and 'test_loss' in metrics and 'test_precision' in metrics and 'test_recall' in metrics and 'target_val_f1' in metrics and 'target_val_loss' in metrics and 'target_val_precision' in metrics and 'target_val_recall' in metrics:
+                    # Already computed test metrics
+                    pass
+                else:
+                    hyperparameters['mode'] = 'base'
+                    best_base_model_path = f'{experiments_dir}/{experiment}/{run}/best_base_model.pt'
+                    from lib.models import TestModel
+                    target_participant = hyperparameters['target_participant']
+                    data_path = hyperparameters['data_path']
+                    batch_size = hyperparameters['batch_size']
+                    criterion = nn.BCEWithLogitsLoss()
 
-                target_test_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_test.pt'))
-                target_testloader = DataLoader(target_test_dataset, batch_size=batch_size, shuffle=False)
-                model = TestModel(dropout=hyperparameters['dropout'],
-                                  use_dilation=hyperparameters['use_dilation'],
-                                  base_channels=hyperparameters['base_channels'],
-                                  num_blocks=hyperparameters['num_blocks'],
-                                  use_residual=hyperparameters['use_residual'])
-                model.load_state_dict(torch.load(best_base_model_path, map_location='cpu'))
-                model.to(device)
-                test_loss, test_f1 = compute_loss_and_f1(model, target_testloader, criterion, device=device)
-                metrics['test_f1'] = test_f1
-                metrics['test_loss'] = test_loss
+                    target_test_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_test.pt'))
+                    target_testloader = DataLoader(target_test_dataset, batch_size=batch_size, shuffle=False)
+                    model = TestModel(dropout=hyperparameters['dropout'],
+                                    use_dilation=hyperparameters['use_dilation'],
+                                    base_channels=hyperparameters['base_channels'],
+                                    num_blocks=hyperparameters['num_blocks'],
+                                    use_residual=hyperparameters['use_residual'])
+                    model.load_state_dict(torch.load(best_base_model_path, map_location='cpu'))
+                    model.to(device)
+                    test_loss, test_f1, test_precision, test_recall = compute_loss_and_f1_and_precision_and_recall(model, target_testloader, criterion, device=device)
+                    metrics['test_f1'] = test_f1
+                    metrics['test_loss'] = test_loss
+                    metrics['test_precision'] = test_precision
+                    metrics['test_recall'] = test_recall
 
-                target_val_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_val.pt'))
-                target_valloader = DataLoader(target_val_dataset, batch_size=batch_size, shuffle=False)
-                model = TestModel(dropout=hyperparameters['dropout'],
-                                  use_dilation=hyperparameters['use_dilation'],
-                                  base_channels=hyperparameters['base_channels'],
-                                  num_blocks=hyperparameters['num_blocks'],
-                                  use_residual=hyperparameters['use_residual'])
-                model.load_state_dict(torch.load(best_base_model_path, map_location='cpu'))
-                model.to(device)
-                val_loss, val_f1 = compute_loss_and_f1(model, target_valloader, criterion, device=device)
-                metrics['target_val_f1'] = val_f1
-                metrics['target_val_loss'] = val_loss
-            
+                    target_val_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_val.pt'))
+                    target_valloader = DataLoader(target_val_dataset, batch_size=batch_size, shuffle=False)
+                    model = TestModel(dropout=hyperparameters['dropout'],
+                                    use_dilation=hyperparameters['use_dilation'],
+                                    base_channels=hyperparameters['base_channels'],
+                                    num_blocks=hyperparameters['num_blocks'],
+                                    use_residual=hyperparameters['use_residual'])
+                    model.load_state_dict(torch.load(best_base_model_path, map_location='cpu'))
+                    model.to(device)
+                    val_loss, val_f1, val_precision, val_recall = compute_loss_and_f1_and_precision_and_recall(model, target_valloader, criterion, device=device)
+                    metrics['target_val_f1'] = val_f1
+                    metrics['target_val_loss'] = val_loss
+                    metrics['target_val_precision'] = val_precision
+                    metrics['target_val_recall'] = val_recall
+
+                    with open(f'{experiments_dir}/{experiment}/{run}/metrics.json', 'w') as f:
+                        json.dump(metrics, f, indent=4)
+                    with open(f'{experiments_dir}/{experiment}/{run}/hyperparameters.json', 'w') as f:
+                        json.dump(hyperparameters, f, indent=4)
+            elif experiment.startswith('finetune') or experiment.startswith('target_only'):
+                if 'test_f1' in metrics and 'test_loss' in metrics and 'test_precision' in metrics and 'test_recall' in metrics:
+                    # Already computed test metrics
+                    pass
+                else:
+                    best_model_path = f'{experiments_dir}/{experiment}/{run}/best_model.pt'
+                    from lib.models import TestModel
+                    target_participant = hyperparameters['target_participant']
+                    data_path = hyperparameters['data_path']
+                    batch_size = hyperparameters['batch_size']
+                    criterion = nn.BCEWithLogitsLoss()
+
+                    target_test_dataset = TensorDataset(*torch.load(f'{data_path}/{target_participant}_test.pt'))
+                    target_testloader = DataLoader(target_test_dataset, batch_size=batch_size, shuffle=False)
+                    model = TestModel(dropout=hyperparameters['dropout'],
+                                    use_dilation=hyperparameters['use_dilation'],
+                                    base_channels=hyperparameters['base_channels'],
+                                    num_blocks=hyperparameters['num_blocks'],
+                                    use_residual=hyperparameters['use_residual'])
+                    model.load_state_dict(torch.load(best_model_path, map_location='cpu'))
+                    model.to(device)
+                    test_loss, test_f1, test_precision, test_recall = compute_loss_and_f1_and_precision_and_recall(model, target_testloader, criterion, device=device)
+                    metrics['test_f1'] = test_f1
+                    metrics['test_loss'] = test_loss
+                    metrics['test_precision'] = test_precision
+                    metrics['test_recall'] = test_recall
+                    with open(f'{experiments_dir}/{experiment}/{run}/metrics.json', 'w') as f:
+                        json.dump(metrics, f, indent=4)
+                
             data.append({
                 **metrics,
                 **hyperparameters,

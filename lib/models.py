@@ -76,9 +76,10 @@ class ResidualBlock(nn.Module):
 
         return out
 class TestModel(nn.Module):
-    def __init__(self, dropout=0.5, use_dilation=False, base_channels=8, num_blocks=4, use_residual=True):
+    def __init__(self, dropout=0.5, use_dilation=False, base_channels=8, num_blocks=4, use_residual=True, return_features=False):
         super(TestModel, self).__init__()
         self.blocks = []
+        self.return_features = return_features
 
         # Generate dilation pattern based on num_blocks
         if use_dilation:
@@ -112,6 +113,8 @@ class TestModel(nn.Module):
             x = block(x)
 
         x = self.gap(x).squeeze(-1)
+        if self.return_features:
+            return x
         x = self.dropout(x)
         x = self.fc(x)
         return x
