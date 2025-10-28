@@ -118,3 +118,37 @@ class TestModel(nn.Module):
         x = self.dropout(x)
         x = self.fc(x)
         return x
+    
+from torch.nn.functional import relu
+class ObnoxiouslySimpleCNN(nn.Module):
+    def __init__(self, input_channels, channels=[64,64], kernel_sizes=[7,5], dilations=[2,4], dropout=.5):
+        super(ObnoxiouslySimpleCNN, self).__init__()
+        self.stem = nn.Conv1d(input_channels, channels[0], kernel_size=7, padding=1, dilation=dilations[0]) # 3000 -> 2994, receptive field 7
+        convs = []
+
+        for in_channels, out_channels, kernel_size, dilation in zip(channels[:-1], channels[1:], kernel_sizes[1:], dilations[1:]):
+            convs.append(
+                nn.Conv1d(
+                    in_channels=in_channels,
+                    out_channels=out_channels,
+                    kernel_size=kernel_size,
+                    padding=((kernel_size - 1) * dilation) // 2,
+                    dilation=dilation
+                )
+            )
+
+        self.convs = nn.ModuleList(convs)
+        self.gap = nn.AdaptiveAvgPool1d(1)
+        self.dropout = nn.Dropout(dropout)
+        self.classifier = nn.Linear(channels[-1], 1)
+
+    def forward(self, x):
+        x = self.stem(x)
+        x = relu(x)
+        for conv in self.convs:
+            x = conv(x)
+            x = relu(x)
+        x = self.gap(x).squeeze(-1)
+        x = self.dropout(x)
+        x = self.classifier(x)        
+        return x

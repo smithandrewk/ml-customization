@@ -7,7 +7,7 @@ dataset:
   window_stride_seconds: 60  # Window stride in seconds
   labeling: "andrew smoking labels"  # Label type to use
   test_size: 0.2  # Train/test split ratio
-  split_by_windows: false  # If true, split at window level; if false, split at session level (prevents temporal leakage)
+  split_by_windows: true  # If true, split at window level; if false, split at session level (prevents temporal leakage)
 
 model: {}  # Parameters computed automatically from dataset config
 
@@ -18,4 +18,7 @@ sensors:
 
 # Participants Configuration
 participants:
-  - "ejaz"
+  - "mariah"
+  - "tj"
+  - "stephanie"
+  - "ashlin"

@@ -311,7 +311,7 @@ def make_windowed_dataset_from_sessions(sessions, window_size, window_stride, ra
 
     for session in sessions:
         session_name = session['session_name']
-        raw_dataset_path = session['raw_dataset_path']
+        raw_dataset_path = session.get('raw_dataset_path', raw_dataset_path)
         start_ns = session.get('start_ns')
         stop_ns = session.get('stop_ns')
         bouts = [b for b in session['bouts'] if b['label'] == labeling]
@@ -760,3 +760,79 @@ def generate_dataset_summary(config, session_data, train_test_splits, X_train, y
             'summary_txt': summary_txt_path
         }
     }
+
+def load_data_for_participant(participant, window_size, window_stride, labeling, sensor_config, split_across_windows=False):
+    participant_id = get_participant_id(participant)
+    print(f"Participant ID: {participant_id}")
+        
+    projects = get_participant_projects(participant_id)
+    print(f"Projects for {participant}: {projects}")
+
+    train_sessions = []
+    val_sessions = []
+    sessions = []
+    for project_name in projects:
+        print(f"Processing project: {project_name}")
+        raw_dataset_path = get_raw_dataset_path(project_name)
+        ss = [s for s in get_sessions_for_project(project_name) if s.get('keep') != 0 and s.get('smoking_verified') == 1]
+        for s in ss:
+            s['raw_dataset_path'] = raw_dataset_path
+        sessions.extend(ss)
+
+    if split_across_windows:
+        print("Splitting data across windows for cross-validation.")
+        # Implement logic for splitting across windows if needed
+        X, y = make_windowed_dataset_from_sessions(
+            sessions=sessions,
+            window_size=window_size,
+            window_stride=window_stride,
+            raw_dataset_path=raw_dataset_path,
+            labeling=labeling,
+            sensor_config=sensor_config
+        )
+        # 3-way split for target participants: 60% train, 20% val, 20% test
+        X_train,X_val,y_train,y_val = train_test_split(
+            X,y,
+            test_size=0.4,  # 40% for val+test
+            random_state=42
+        )
+    else:
+        # 3-way split for target participants: 60% train, 20% val, 20% test
+        train_sessions, temp_sessions = train_test_split(
+            sessions,
+            test_size=0.2,  # 40% for val+test
+            random_state=42
+        )
+        val_sessions, test_sessions = train_test_split(
+            temp_sessions,
+            test_size=0.5,  # 50% of 40% = 20% total for test
+            random_state=42
+        )
+
+        val_sessions = val_sessions + test_sessions
+        print(f"Target participant split - Train: {len(train_sessions)}, Val: {len(val_sessions)}")
+
+        X_train, y_train = make_windowed_dataset_from_sessions(
+            sessions=train_sessions,
+            window_size=window_size,
+            window_stride=window_stride,
+            raw_dataset_path=raw_dataset_path,
+            labeling=labeling,
+            sensor_config={'use_accelerometer': True, 'use_gyroscope': True}
+        )
+
+        X_val, y_val = make_windowed_dataset_from_sessions(
+            sessions=val_sessions,
+            window_size=window_size,
+            window_stride=window_stride,
+            raw_dataset_path=raw_dataset_path,
+            labeling=labeling,
+            sensor_config={'use_accelerometer': True, 'use_gyroscope': True}
+        )
+
+    y_train = y_train.reshape(-1,1)
+    y_val = y_val.reshape(-1,1)
+    print(X_train.shape, y_train.shape)
+    print(X_val.shape, y_val.shape)
+
+    return X_train, y_train, X_val, y_val, train_sessions, val_sessions
