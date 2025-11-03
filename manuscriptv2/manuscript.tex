@@ -1,4 +1,3 @@
-% Nature-style manuscript template
 \documentclass[fleqn,10pt]{article}
 \usepackage{geometry}
 \geometry{letterpaper, margin=1in}
@@ -12,49 +11,87 @@
 \usepackage{xcolor}
 \linenumbers
 
-% Auto-generated metrics
 
-\newcommand{\nParticipants}{13}
-\newcommand{\baseFoneMean}{0.709}
-\newcommand{\baseFoneStd}{0.213}
-\newcommand{\baseFoneMax}{0.964}
-\newcommand{\baseFoneMin}{0.432}
-\newcommand{\finetuneFoneMean}{0.836}
-\newcommand{\finetuneFoneStd}{0.126}
-\newcommand{\finetuneFoneMax}{0.980}
-\newcommand{\finetuneFoneMin}{0.621}
-\newcommand{\absoluteImprovementMean}{0.127}
-\newcommand{\absoluteImprovementStd}{0.097}
-\newcommand{\absoluteImprovementMax}{0.268}
-\newcommand{\absoluteImprovementMin}{0.003}
-\newcommand{\relativeImprovementMean}{23.7}
-\newcommand{\relativeImprovementStd}{21.9}
-\newcommand{\relativeImprovementMax}{61.9}
-\newcommand{\relativeImprovementMin}{0.3}
-\newcommand{\relativeRoomForImprovementMean}{41.3}
-\newcommand{\relativeRoomForImprovementStd}{13.6}
-\newcommand{\relativeRoomForImprovementMax}{57.2}
-\newcommand{\relativeRoomForImprovementMin}{7.7}
-\newcommand{\precisionMean}{0.861}
-\newcommand{\precisionStd}{0.110}
-\newcommand{\precisionImprovementMean}{0.097}
-\newcommand{\recallMean}{0.828}
-\newcommand{\recallStd}{0.131}
-\newcommand{\recallImprovementMean}{0.090}
+\newcommand{\nParticipants}{17}
+\newcommand{\baseFoneMean}{0.647}
+\newcommand{\baseFoneStd}{0.207}
+\newcommand{\baseFoneMax}{0.975}
+\newcommand{\baseFoneMin}{0.428}
+\newcommand{\finetuneFoneMean}{0.776}
+\newcommand{\finetuneFoneStd}{0.145}
+\newcommand{\finetuneFoneMax}{0.983}
+\newcommand{\finetuneFoneMin}{0.601}
+\newcommand{\absoluteImprovementMean}{0.130}
+\newcommand{\absoluteImprovementStd}{0.077}
+\newcommand{\absoluteImprovementMax}{0.240}
+\newcommand{\absoluteImprovementMin}{0.007}
+\newcommand{\relativeImprovementMean}{24.9}
+\newcommand{\relativeImprovementStd}{17.6}
+\newcommand{\relativeImprovementMax}{54.5}
+\newcommand{\relativeImprovementMin}{0.8}
+\newcommand{\relativeRoomForImprovementMean}{37.4}
+\newcommand{\relativeRoomForImprovementStd}{11.7}
+\newcommand{\relativeRoomForImprovementMax}{58.0}
+\newcommand{\relativeRoomForImprovementMin}{14.4}
+\newcommand{\precisionMean}{0.817}
+\newcommand{\precisionStd}{0.122}
+\newcommand{\precisionImprovementMean}{0.112}
+\newcommand{\recallMean}{0.771}
+\newcommand{\recallStd}{0.151}
+\newcommand{\recallImprovementMean}{0.088}
+
 % 1% data regime metrics
-\newcommand{\onePctFinetuneMedian}{0.730}
-\newcommand{\onePctTargetOnlyMedian}{0.494}
-\newcommand{\onePctAbsoluteImprovement}{0.236}
-\newcommand{\onePctRetentionPct}{83.0}
-% Dataset statistics - \textcolor{red}{TODO: Verify these calculated values from eval\_demographics.ipynb}
+\newcommand{\onePctFinetuneMedian}{0.627}
+\newcommand{\onePctTargetOnlyMedian}{0.535}
+\newcommand{\onePctAbsoluteImprovement}{0.092}
+\newcommand{\onePctRetentionPct}{74.2}
+
+
+% Additional computed metrics
+
+% Participant counts
+\newcommand{\nNonTargetParticipants}{16}
+
+% Data collection parameters
+\newcommand{\collectionPeriodDays}{14}
+\newcommand{\collectionPeriodWeeks}{2}
+\newcommand{\meanWearTimeHours}{127.1}
+
+% Hours for different data regimes
+\newcommand{\onePctDataHours}{1.3}
+\newcommand{\fivePctDataHours}{6.4}
+\newcommand{\tenPctDataHours}{12.7}
+
+% 5% data regime metrics
+\newcommand{\fivePctFinetuneMedian}{0.75}
+\newcommand{\fivePctTargetOnlyMedian}{0.66}
+\newcommand{\fivePctFOneGap}{0.09}
+
+% 10% data regime metrics
+\newcommand{\tenPctFinetuneMedian}{0.76}
+\newcommand{\tenPctTargetOnlyMedian}{0.70}
+
+% 100% data regime metrics  
+\newcommand{\fullDataFinetuneMedian}{0.85}
+\newcommand{\fullDataTargetOnlyMedian}{0.82}
+\newcommand{\fullDataImprovement}{0.011}
+
+% Retention and efficiency metrics
+\newcommand{\onePctTargetOnlyRetentionPct}{65.5}
+\newcommand{\onePctRetentionDifference}{8.7}
+\newcommand{\dataEfficiencyFold}{20}
+
+% Dataset statistics
 \newcommand{\totalWindows}{98,568}
 \newcommand{\windowsPerParticipant}{7,582}
 \newcommand{\positiveClassPercentage}{6.3}
 \newcommand{\trainWindows}{59,141}
 \newcommand{\testWindows}{19,714}
+
 % Model architecture parameters
 \newcommand{\baseChannels}{64}
-\newcommand{\numParams}{50,753}  % \textcolor{red}{TODO: Compute exact parameter count for base\_channels=64}
+\newcommand{\numParams}{50,753}
+
 % Title
 \title{\textbf{Customizing Smoking Networks}}
 
@@ -86,14 +123,14 @@ While population-trained models show promise, they often fail for individuals wi
 
 The fundamental bottleneck lies in data collection. Acquiring labeled smoking events from individuals requires disruptive ecological momentary assessment (EMA), where users manually annotate their behavior throughout the day. High labeling burden reduces compliance and introduces annotation fatigue, limiting the feasibility of collecting the hundreds or thousands of labeled examples typically required to train deep learning models from scratch. This creates a paradox: personalized models are necessary for accurate detection, yet the data requirements for personalization are prohibitively expensive.
 
-Transfer learning offers a potential solution by leveraging knowledge from population-level models to accelerate individual adaptation. We demonstrate that fine-tuning pre-trained population models with minimal individual data—as little as 6 hours per participant (5\% of average wear time)—achieves robust personalization. We compare transfer learning against training models from scratch on individual data, showing that fine-tuning achieves comparable performance with 20-fold reduction in required labeled data. Through leave-one-participant-out cross-validation on \nParticipants~participants, we establish a practical pathway for deploying personalized smoking detection systems that balance accuracy with feasible data collection requirements. Retraining population models to include each new individual is computationally prohibitive for large-scale deployment, making our transfer learning approach essential for scalable personalized intervention systems. 
+Transfer learning offers a potential solution by leveraging knowledge from population-level models to accelerate individual adaptation. We demonstrate that fine-tuning pre-trained population models with minimal individual data—as little as \fivePctDataHours~hours per participant (5\% of average wear time)—achieves robust personalization. We compare transfer learning against training models from scratch on individual data, showing that fine-tuning achieves comparable performance with \dataEfficiencyFold-fold reduction in required labeled data. Through leave-one-participant-out cross-validation on \nParticipants~participants, we establish a practical pathway for deploying personalized smoking detection systems that balance accuracy with feasible data collection requirements. Retraining population models to include each new individual is computationally prohibitive for large-scale deployment, making our transfer learning approach essential for scalable personalized intervention systems. 
 \section{Methods}
 
 \subsection{Data Collection and Processing}
 
-\textbf{Participants and Recruitment:} \textcolor{red}{[TODO: Replace with actual recruitment details]} \nParticipants~adult daily smokers were recruited from an ongoing smoking behavior research study. Participants were required to be current daily cigarette smokers (smoking at least 5 cigarettes per day) and willing to wear a smartwatch continuously for 14 days. All participants provided informed consent and completed the 14-day data collection protocol. Specific demographic characteristics are summarized at the cohort level to protect participant privacy.
+\textbf{Participants and Recruitment:} \textcolor{red}{[TODO: Replace with actual recruitment details]} \nParticipants~adult daily smokers were recruited from an ongoing smoking behavior research study. Participants were required to be current daily cigarette smokers (smoking at least 5 cigarettes per day) and willing to wear a smartwatch continuously for \collectionPeriodDays~days. All participants provided informed consent and completed the \collectionPeriodDays-day data collection protocol. Specific demographic characteristics are summarized at the cohort level to protect participant privacy.
 
-\textbf{Data Collection Protocol:} Participants wore TicWatch smartwatches with 3-axis accelerometers and gyroscopes sampling at 50 Hz continuously for 14 days in naturalistic settings where they normally smoked. Custom software autonomously recorded motion data throughout wear periods. Participants self-reported smoking events in real-time by pressing a button on the watch interface when beginning and ending each cigarette, creating timestamped annotations of smoking bouts. Participants were instructed to wear the watch on their dominant wrist during all waking hours, charge the device nightly, and continue their normal smoking routines without modification. No ecological momentary assessments or smoking behavior prompts were administered beyond the self-initiated event annotations.
+\textbf{Data Collection Protocol:} Participants wore TicWatch smartwatches with 3-axis accelerometers and gyroscopes sampling at 50 Hz continuously for \collectionPeriodDays~days in naturalistic settings where they normally smoked. Custom software autonomously recorded motion data throughout wear periods. Participants self-reported smoking events in real-time by pressing a button on the watch interface when beginning and ending each cigarette, creating timestamped annotations of smoking bouts. Participants were instructed to wear the watch on their dominant wrist during all waking hours, charge the device nightly, and continue their normal smoking routines without modification. No ecological momentary assessments or smoking behavior prompts were administered beyond the self-initiated event annotations.
 
 \textbf{Data Processing and Labeling:} Raw sensor data formed 6-dimensional time series (3 accelerometer, 3 gyroscope axes) per wear session (periods of continuous device wear). For each participant, wear sessions were first randomly split into train (60\%), validation (20\%), and test (20\%) sets at the session level to prevent temporal leakage between sets. We then applied a 60-second sliding window with 60-second stride to segment each session into non-overlapping 3000-sample windows (60 seconds × 50 Hz).
 
@@ -107,7 +144,7 @@ The first block transformed the 6-channel input to \baseChannels~feature channel
 
 \subsection{Training Procedures}
 
-\textbf{Base Model Training:} For each LOPO fold, base models were trained on the 12 non-target participants using their training and validation sets for model updates, while their test sets were pooled to form a base validation set for early stopping and hyperparameter selection. We used binary cross-entropy loss without positive class weighting, the AdamW optimizer with learning rate 3×10$^{-4}$, and batch size 32. Training incorporated data augmentation (Gaussian jitter with $\sigma$=0.005, magnitude scaling [0.98, 1.02], applied with probability 0.3) to improve robustness. Models were trained with early stopping on base validation F1 score (patience: 50 epochs). Random seeds controlled weight initialization to ensure reproducibility.
+\textbf{Base Model Training:} For each LOPO fold, base models were trained on the \nNonTargetParticipants~non-target participants using their training and validation sets for model updates, while their test sets were pooled to form a base validation set for early stopping and hyperparameter selection. We used binary cross-entropy loss without positive class weighting, the AdamW optimizer with learning rate 3×10$^{-4}$, and batch size 32. Training incorporated data augmentation (Gaussian jitter with $\sigma$=0.005, magnitude scaling [0.98, 1.02], applied with probability 0.3) to improve robustness. Models were trained with early stopping on base validation F1 score (patience: 50 epochs). Random seeds controlled weight initialization to ensure reproducibility.
 
 \textbf{Fine-Tuning:} Base models were adapted to target participants by continuing training exclusively on target participant training data, with the target validation set used for early stopping. All network parameters were unfrozen and updated using the same optimizer and learning rate (3×10$^{-4}$) as base training. To address class imbalance in target data, we applied binary cross-entropy loss with positive class weight 1.0. Early stopping used target validation F1 score with extended patience (200 epochs) to allow thorough adaptation. Fine-tuning employed a separate random seed (\texttt{seed\_finetune}) independent of the base model seed, enabling multiple fine-tuning runs from the same pretrained base model to assess fine-tuning variance.
 
@@ -117,13 +154,13 @@ The first block transformed the 6-channel input to \baseChannels~feature channel
 
 \subsection{Experimental Design}
 
-We employed leave-one-participant-out (LOPO) cross-validation across \nParticipants~participants. Each participant's data were split into train (60\%), validation (20\%), and test (20\%) sets at the session level as described in Section 2.1. For each LOPO fold, one participant served as the target for personalization and evaluation, while the remaining 12 participants formed the base population.
+We employed leave-one-participant-out (LOPO) cross-validation across \nParticipants~participants. Each participant's data were split into train (60\%), validation (20\%), and test (20\%) sets at the session level as described in Section 2.1. For each LOPO fold, one participant served as the target for personalization and evaluation, while the remaining \nNonTargetParticipants~participants formed the base population.
 
 Validation sets served dual purposes: (1) early stopping to prevent overfitting and (2) hyperparameter selection during model development. Training sets were used exclusively for gradient-based model updates. Test sets were strictly held out for final performance evaluation and never used during training or model selection, ensuring unbiased estimates of generalization performance.
 
-For each LOPO fold, we evaluated three training paradigms: (1) \textbf{base model} trained on 12 non-target participants using their train+val sets for training and test sets for validation; (2) \textbf{target-only model} trained from scratch using only target participant train set with target val for early stopping; and (3) \textbf{fine-tuned model} initialized with base weights and adapted using target train set with target val for early stopping. All models were evaluated on the target participant's held-out test set.
+For each LOPO fold, we evaluated three training paradigms: (1) \textbf{base model} trained on \nNonTargetParticipants~non-target participants using their train+val sets for training and test sets for validation; (2) \textbf{target-only model} trained from scratch using only target participant train set with target val for early stopping; and (3) \textbf{fine-tuned model} initialized with base weights and adapted using target train set with target val for early stopping. All models were evaluated on the target participant's held-out test set.
 
-To assess data efficiency, we systematically varied the fraction of target training data available for personalization (5\%, 12.5\%, 25\%, 50\%, 100\%). For each data fraction, we sampled windows uniformly at random from the target training set. This simulates real-world scenarios where minimal individual data collection is preferred.
+To assess data efficiency, we systematically varied the fraction of target training data available for personalization (5\%, 10\%, 25\%, 50\%, 100\%). For each data fraction, we sampled windows uniformly at random from the target training set. This simulates real-world scenarios where minimal individual data collection is preferred.
 
 \subsection{Evaluation Metrics}
 
@@ -148,12 +185,12 @@ t-SNE dimensionality reduction mapped these features to 2D space using standard 
 \section{Results}
 \subsection{Dataset Description}
 
-\nParticipants~participants provided wrist-worn accelerometer and gyroscope data during real-world smoking behavior over 14-day collection periods. A total of 1652.8 hours of continuous time series data were collected (mean: 127.1 hours per participant), organized into an average of 25.3 wear sessions per participant (mean session duration: 5.02 hours). Participants recorded 825 smoking bouts across all sessions (mean: 2.51 bouts per session), with 81.2\% of sessions containing at least one smoking event. Total smoking duration was 104.7 hours (mean bout duration: 390.9 seconds).
+\nParticipants~participants provided wrist-worn accelerometer and gyroscope data during real-world smoking behavior over \collectionPeriodDays-day collection periods. A total of 1652.8 hours of continuous time series data were collected (mean: \meanWearTimeHours~hours per participant), organized into an average of 25.3 wear sessions per participant (mean session duration: 5.02 hours). Participants recorded 825 smoking bouts across all sessions (mean: 2.51 bouts per session), with 81.2\% of sessions containing at least one smoking event. Total smoking duration was 104.7 hours (mean bout duration: 390.9 seconds).
 
-After windowing the continuous time series into 60-second non-overlapping segments (3000 samples per window at 50 Hz), the dataset comprised \totalWindows~windows across all participants (mean: \windowsPerParticipant~windows per participant). The positive class (smoking) constituted \positiveClassPercentage\% of all windows, reflecting the class imbalance typical of episodic behavioral detection tasks. For LOPO cross-validation, each fold's training set contained approximately \trainWindows~windows from 12 participants, while test sets contained approximately \testWindows~windows from the held-out participant.
+After windowing the continuous time series into 60-second non-overlapping segments (3000 samples per window at 50 Hz), the dataset comprised \totalWindows~windows across all participants (mean: \windowsPerParticipant~windows per participant). The positive class (smoking) constituted \positiveClassPercentage\% of all windows, reflecting the class imbalance typical of episodic behavioral detection tasks. For LOPO cross-validation, each fold's training set contained approximately \trainWindows~windows from \nNonTargetParticipants~participants, while test sets contained approximately \testWindows~windows from the held-out participant.
 
 \subsection{Population Models Exhibit Poor Generalization to Individuals}
-Base models trained on 12 participants and evaluated on the held-out participant showed substantial performance variability across individuals (Figure \ref{fig:base_test}A-B). We evaluate models using F1 score (harmonic mean of precision and recall), which balances detection accuracy (precision: fraction of detected smoking that is correct) with detection completeness (recall: fraction of true smoking detected). Mean F1 score for base models was \baseFoneMean~$\pm$~\baseFoneStd, with individual participant performance ranging from \baseFoneMin~to~\baseFoneMax. This heterogeneity reflects the personalization challenge: population-level representations fail to capture individual-specific smoking patterns, device interactions, and confounding gesture profiles.
+Base models trained on \nNonTargetParticipants~participants and evaluated on the held-out participant showed substantial performance variability across individuals (Figure \ref{fig:base_test}A-B). We evaluate models using F1 score (harmonic mean of precision and recall), which balances detection accuracy (precision: fraction of detected smoking that is correct) with detection completeness (recall: fraction of true smoking detected). Mean F1 score for base models was \baseFoneMean~$\pm$~\baseFoneStd, with individual participant performance ranging from \baseFoneMin~to~\baseFoneMax. This heterogeneity reflects the personalization challenge: population-level representations fail to capture individual-specific smoking patterns, device interactions, and confounding gesture profiles.
 
 Cross-participant performance variation was particularly pronounced for participants exhibiting distinct smoking styles or hand dominance patterns (Table \ref{tab:performance}). Fold 3 showed the largest generalization gap (base F1 = 0.43), suggesting their smoking gestures deviated substantially from population norms. Conversely, folds 2, 4, and 11 achieved relatively stronger base performance (F1 $\geq$ 0.96), indicating greater similarity to the training distribution. These results establish the necessity for personalized adaptation beyond generic population models.
 
@@ -190,21 +227,25 @@ Precision and recall analyses revealed balanced improvements across both metrics
 \hline
 \textbf{Fold} & \textbf{Base F1} & \textbf{Fine-tuned F1} & \textbf{$\Delta$F1} & \textbf{Rel. Imp. (\%)} & \textbf{Precision} & \textbf{Recall} & \textbf{$\Delta$Prec} & \textbf{$\Delta$Rec} \\
 \hline
-0 & 0.84 & 0.93 & +0.09 & 10.8 & 0.94 & 0.93 & +0.15 & +0.00 \\
-1 & 0.67 & 0.83 & +0.16 & 23.4 & 0.87 & 0.80 & +0.05 & +0.18 \\
-2 & 0.96 & 0.97 & +0.00 & 0.3 & 0.98 & 0.96 & +0.01 & -0.00 \\
-3 & 0.43 & 0.70 & +0.27 & 61.9 & 0.75 & 0.71 & +0.05 & +0.19 \\
-4 & 0.96 & 0.97 & +0.01 & 1.5 & 0.97 & 0.97 & +0.02 & +0.01 \\
-5 & 0.88 & 0.93 & +0.05 & 5.7 & 0.93 & 0.93 & +0.06 & +0.04 \\
-6 & 0.44 & 0.68 & +0.23 & 52.1 & 0.72 & 0.68 & +0.00 & +0.17 \\
-7 & 0.49 & 0.72 & +0.22 & 45.7 & 0.77 & 0.68 & +0.28 & +0.19 \\
-8 & 0.68 & 0.85 & +0.18 & 26.0 & 0.90 & 0.83 & +0.27 & +0.03 \\
-9 & 0.89 & 0.93 & +0.04 & 4.6 & 0.95 & 0.91 & +0.07 & +0.02 \\
-10 & 0.52 & 0.77 & +0.25 & 49.1 & 0.81 & 0.76 & +0.11 & +0.23 \\
-11 & 0.96 & 0.98 & +0.02 & 2.1 & 0.96 & 1.00 & +0.03 & +0.00 \\
-12 & 0.50 & 0.62 & +0.12 & 24.3 & 0.64 & 0.61 & +0.14 & +0.11 \\
-\textbf{Mean} & \textbf{0.709} & \textbf{0.836} & \textbf{0.127} & \textbf{23.7} & \textbf{0.861} & \textbf{0.828} & \textbf{0.097} & \textbf{0.090} \\
-\textbf{Std} & \textbf{0.213} & \textbf{0.126} & \textbf{0.097} & \textbf{21.9} & \textbf{0.110} & \textbf{0.131} & \textbf{0.092} & \textbf{0.090} \\
+0 & 0.84 & 0.93 & +0.09 & 10.3 & 0.92 & 0.95 & +0.14 & -0.00 \\
+1 & 0.71 & 0.81 & +0.10 & 14.3 & 0.87 & 0.78 & +0.05 & +0.12 \\
+2 & 0.95 & 0.96 & +0.01 & 0.8 & 0.98 & 0.94 & +0.03 & -0.01 \\
+3 & 0.51 & 0.68 & +0.18 & 35.1 & 0.80 & 0.63 & +0.29 & +0.13 \\
+4 & 0.43 & 0.66 & +0.23 & 54.5 & 0.73 & 0.67 & +0.07 & +0.16 \\
+5 & 0.98 & 0.98 & +0.01 & 0.8 & 0.99 & 0.98 & +0.01 & +0.00 \\
+6 & 0.83 & 0.92 & +0.08 & 10.2 & 0.90 & 0.94 & +0.13 & +0.02 \\
+7 & 0.44 & 0.65 & +0.22 & 49.4 & 0.72 & 0.66 & +0.07 & +0.16 \\
+8 & 0.51 & 0.67 & +0.16 & 30.4 & 0.77 & 0.63 & +0.24 & +0.12 \\
+9 & 0.45 & 0.60 & +0.15 & 34.7 & 0.60 & 0.61 & +0.20 & +0.11 \\
+10 & 0.59 & 0.83 & +0.24 & 40.9 & 0.86 & 0.82 & +0.30 & +0.13 \\
+11 & 0.47 & 0.64 & +0.17 & 36.8 & 0.70 & 0.63 & +0.07 & +0.13 \\
+12 & 0.44 & 0.60 & +0.16 & 37.0 & 0.70 & 0.61 & -0.05 & +0.11 \\
+13 & 0.85 & 0.92 & +0.07 & 7.9 & 0.93 & 0.90 & +0.09 & +0.05 \\
+14 & 0.56 & 0.77 & +0.22 & 38.7 & 0.85 & 0.75 & +0.13 & +0.20 \\
+15 & 0.95 & 0.97 & +0.02 & 2.2 & 0.96 & 0.99 & +0.04 & -0.00 \\
+16 & 0.50 & 0.60 & +0.10 & 19.9 & 0.63 & 0.59 & +0.10 & +0.09 \\
+\textbf{Mean} & \textbf{0.647} & \textbf{0.776} & \textbf{0.130} & \textbf{24.9} & \textbf{0.817} & \textbf{0.771} & \textbf{0.112} & \textbf{0.088} \\
+\textbf{Std} & \textbf{0.207} & \textbf{0.145} & \textbf{0.077} & \textbf{17.6} & \textbf{0.122} & \textbf{0.151} & \textbf{0.097} & \textbf{0.066} \\
 \hline
 \end{tabular}
 \end{table}
@@ -220,26 +261,26 @@ While the performance gap with full data is modest, this comparison establishes 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.8\textwidth]{../figure3.pdf}
-    \caption{\textbf{Comprehensive performance comparison: three training approaches.} Test F1 scores for base model, target-only model, and fine-tuned model across all individuals, highlighting the superiority of fine-tuning. Even with 100\% of individual data available to both approaches, fine-tuned models (median F1 $\approx$ 0.88) significantly outperform target-only models (median F1 $\approx$ 0.87) with mean improvement of 0.014 F1 points (p < 0.001, Wilcoxon signed-rank test), demonstrating that population pretraining provides benefits beyond data efficiency.}
+    \caption{\textbf{Comprehensive performance comparison: three training approaches.} Test F1 scores for base model, target-only model, and fine-tuned model across all individuals, highlighting the superiority of fine-tuning. Even with 100\% of individual data available to both approaches, fine-tuned models (median F1 $\approx$ \fullDataFinetuneMedian) significantly outperform target-only models (median F1 $\approx$ \fullDataTargetOnlyMedian) with mean improvement of \fullDataImprovement~F1 points (p < 0.001, Wilcoxon signed-rank test), demonstrating that population pretraining provides benefits beyond data efficiency.}
     \label{fig:three_way_comparison}
 \end{figure}
 
 \subsection{Transfer Learning Excels in Low-Data Regimes}
 
-The critical advantage of transfer learning emerges when individual data is limited. We systematically evaluated both approaches across data-scarce regimes by training models with 1\%, 5\%, 12.5\%, 25\%, 50\%, and 100\% of each participant's data (Figure \ref{fig:low_data_comparison}). The results reveal a dramatic divergence in data efficiency between methods.
+The critical advantage of transfer learning emerges when individual data is limited. We systematically evaluated both approaches across data-scarce regimes by training models with 1\%, 5\%, 10\%, 25\%, 50\%, and 100\% of each participant's data (Figure \ref{fig:low_data_comparison}). The results reveal a dramatic divergence in data efficiency between methods.
 
-At the most extreme data scarcity (1\% of target data, approximately 1.2 hours per participant), the superiority of transfer learning is most pronounced. Target-only models trained from scratch collapsed to median F1 of \onePctTargetOnlyMedian, barely exceeding chance performance and exhibiting high variance across participants. In stark contrast, fine-tuned models maintained robust performance with median F1 of \onePctFinetuneMedian, demonstrating an absolute improvement of \onePctAbsoluteImprovement~F1 points over target-only training. This improvement at 1\% data is nearly twice the magnitude of the mean improvement from base to fine-tuned models at full data (\absoluteImprovementMean), underscoring the critical value of population-pretrained representations when individual labels are extremely scarce. Remarkably, fine-tuning with just 1\% of target data retains \onePctRetentionPct\% of the performance achieved with 100\% of target data, while target-only training at 1\% achieves only 56.6\% of its full-data performance—a 26.4 percentage point difference in retention. At this extreme, fine-tuned models with 1\% data approach the performance of base population models (median \onePctFinetuneMedian~vs. mean \baseFoneMean), demonstrating that minimal individual data is sufficient to match or exceed generic population models.
+At the most extreme data scarcity (1\% of target data, approximately \onePctDataHours~hours per participant), the superiority of transfer learning is most pronounced. Target-only models trained from scratch collapsed to median F1 of \onePctTargetOnlyMedian, barely exceeding chance performance and exhibiting high variance across participants. In stark contrast, fine-tuned models maintained robust performance with median F1 of \onePctFinetuneMedian, demonstrating an absolute improvement of \onePctAbsoluteImprovement~F1 points over target-only training. This improvement at 1\% data is nearly twice the magnitude of the mean improvement from base to fine-tuned models at full data (\absoluteImprovementMean), underscoring the critical value of population-pretrained representations when individual labels are extremely scarce. Remarkably, fine-tuning with just 1\% of target data retains \onePctRetentionPct\% of the performance achieved with 100\% of target data, while target-only training at 1\% achieves only \onePctTargetOnlyRetentionPct\% of its full-data performance—a \onePctRetentionDifference~percentage point difference in retention. At this extreme, fine-tuned models with 1\% data approach the performance of base population models (median \onePctFinetuneMedian~vs. mean \baseFoneMean), demonstrating that minimal individual data is sufficient to match or exceed generic population models.
 
-At 5\% of target data (approximately 6 hours per participant), target-only models improved to median F1 $\approx$ 0.71 but still exhibited substantial variance, indicating unreliable personalization. In contrast, fine-tuned models maintained robust performance (median F1 $\approx$ 0.80), approaching their full-data performance with just a fraction of individual labels. This represents a performance gap of approximately 0.09 F1 points at 5\% data.
+At 5\% of target data (approximately \fivePctDataHours~hours per participant), target-only models improved to median F1 $\approx$ \fivePctTargetOnlyMedian~but still exhibited substantial variance, indicating unreliable personalization. In contrast, fine-tuned models maintained robust performance (median F1 $\approx$ \fivePctFinetuneMedian), approaching their full-data performance with just a fraction of individual labels. This represents a performance gap of approximately \fivePctFOneGap~F1 points at 5\% data.
 
-The data efficiency advantage persisted across all tested fractions. At 12.5\% data (~16 hours), fine-tuned models (F1 $\approx$ 0.83) substantially outperformed target-only models (F1 $\approx$ 0.76). The two approaches converged only at 100\% data, where both achieved similar performance. Critically, fine-tuned models trained on 5\% of target data matched or exceeded the performance of target-only models trained on 100\% of target data, representing approximately 20-fold improvement in data efficiency.
+The data efficiency advantage persisted across all tested fractions. At 10\% data ($\sim$\tenPctDataHours~hours), fine-tuned models (F1 $\approx$ \tenPctFinetuneMedian) substantially outperformed target-only models (F1 $\approx$ \tenPctTargetOnlyMedian). The two approaches converged only at 100\% data, where both achieved similar performance. Critically, fine-tuned models trained on 5\% of target data matched or exceeded the performance of target-only models trained on 100\% of target data, representing approximately \dataEfficiencyFold-fold improvement in data efficiency.
 
-These findings have profound implications for practical deployment. Collecting two weeks of labeled data (approximately 127 hours of wear time) represents a substantial user burden that limits real-world feasibility. Transfer learning dramatically reduces this requirement: with just 1\% of this data (1.2 hours), fine-tuning achieves \onePctRetentionPct\% performance retention (median F1 \onePctFinetuneMedian), while target-only training collapses to barely functional performance (median F1 \onePctTargetOnlyMedian). At 5\% data (~6 hours), fine-tuning performance approaches full-data levels. This reduction from two weeks to one hour of data collection transforms personalized smoking detection from an impractical research protocol into a deployable intervention system. This data-efficient personalization strategy generalizes beyond smoking detection to any behavioral sensing application where individual variability is high but per-user data collection is costly.
+These findings have profound implications for practical deployment. Collecting \collectionPeriodWeeks~weeks of labeled data (approximately \meanWearTimeHours~hours of wear time) represents a substantial user burden that limits real-world feasibility. Transfer learning dramatically reduces this requirement: with just 1\% of this data (\onePctDataHours~hours), fine-tuning achieves \onePctRetentionPct\% performance retention (median F1 \onePctFinetuneMedian), while target-only training collapses to barely functional performance (median F1 \onePctTargetOnlyMedian). At 5\% data ($\sim$\fivePctDataHours~hours), fine-tuning performance approaches full-data levels. This reduction from two weeks to one hour of data collection transforms personalized smoking detection from an impractical research protocol into a deployable intervention system. This data-efficient personalization strategy generalizes beyond smoking detection to any behavioral sensing application where individual variability is high but per-user data collection is costly.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.8\textwidth]{../figure4.pdf}
-    \caption{\textbf{Low-data regime performance comparison.} Test F1 scores for target-only and fine-tuned models across varying fractions of target data (1\%, 5\%, 12.5\%, 25\%, 50\%, 100\%), demonstrating the advantage of fine-tuning in data-scarce scenarios. The most extreme divergence occurs at 1\% data, where fine-tuning maintains median F1 of \onePctFinetuneMedian~while target-only training collapses to \onePctTargetOnlyMedian, showing an absolute improvement of \onePctAbsoluteImprovement~F1 points.}
+    \caption{\textbf{Low-data regime performance comparison.} Test F1 scores for target-only and fine-tuned models across varying fractions of target data (1\%, 5\%, 10\%, 25\%, 50\%, 100\%), demonstrating the advantage of fine-tuning in data-scarce scenarios. The most extreme divergence occurs at 1\% data, where fine-tuning maintains median F1 of \onePctFinetuneMedian~while target-only training collapses to \onePctTargetOnlyMedian, showing an absolute improvement of \onePctAbsoluteImprovement~F1 points.}
     \label{fig:low_data_comparison}
 \end{figure}
 
@@ -262,13 +303,13 @@ This dual organization—shared smoking semantics with individual-specific organ
 
 \section{Discussion}
 
-We demonstrate that transfer learning resolves the fundamental tension between personalization accuracy and data collection burden in wearable behavioral sensing. By fine-tuning population-pretrained models with minimal individual data, we achieve robust personalized smoking detection with as little as 1.2 hours (1\% of target data) of user data, where fine-tuning maintains median F1 of \onePctFinetuneMedian~while target-only training collapses to \onePctTargetOnlyMedian. This approach delivers mean F1 scores of \finetuneFoneMean~across \nParticipants~participants, substantially outperforming both population-only models (\baseFoneMean) and data-matched individual models in low-data regimes.
+We demonstrate that transfer learning resolves the fundamental tension between personalization accuracy and data collection burden in wearable behavioral sensing. By fine-tuning population-pretrained models with minimal individual data, we achieve robust personalized smoking detection with as little as \onePctDataHours~hours (1\% of target data) of user data, where fine-tuning maintains median F1 of \onePctFinetuneMedian~while target-only training collapses to \onePctTargetOnlyMedian. This approach delivers mean F1 scores of \finetuneFoneMean~across \nParticipants~participants, substantially outperforming both population-only models (\baseFoneMean) and data-matched individual models in low-data regimes.
 
 \subsection{Implications for Deployment}
 
 The practical implications for real-world intervention systems are substantial. Traditional personalization approaches require extensive per-user data collection that creates deployment barriers: users must label hundreds or thousands of behavioral instances, introducing annotation fatigue and reducing compliance. Our transfer learning approach reduces this burden dramatically, requiring only hours rather than weeks of labeled data per individual. This makes personalized wearable interventions feasible at scale.
 
-Most remarkably, our results demonstrate that even at the extreme of 1\% individual data (approximately 1.2 hours of wear time), fine-tuning achieves median F1 of \onePctFinetuneMedian—representing \onePctRetentionPct\% of the performance obtained with full individual data collection. This represents a practical breakthrough: users can achieve highly functional personalized detection after wearing the device for barely more than one hour, rather than two weeks. The absolute improvement of \onePctAbsoluteImprovement~F1 points over target-only training at this extreme data scarcity underscores the critical value of population pretraining. For rapid deployment scenarios, pilot studies, or populations where sustained data collection is challenging, the 1\% regime provides a viable path to personalization that was previously infeasible. At 5\% data (~6 hours), performance increases further, providing deployment flexibility based on the accuracy-burden tradeoff appropriate for each use case.
+Most remarkably, our results demonstrate that even at the extreme of 1\% individual data (approximately \onePctDataHours~hours of wear time), fine-tuning achieves median F1 of \onePctFinetuneMedian—representing \onePctRetentionPct\% of the performance obtained with full individual data collection. This represents a practical breakthrough: users can achieve highly functional personalized detection after wearing the device for barely more than one hour, rather than \collectionPeriodWeeks~weeks. The absolute improvement of \onePctAbsoluteImprovement~F1 points over target-only training at this extreme data scarcity underscores the critical value of population pretraining. For rapid deployment scenarios, pilot studies, or populations where sustained data collection is challenging, the 1\% regime provides a viable path to personalization that was previously infeasible. At 5\% data ($\sim$\fivePctDataHours~hours), performance increases further, providing deployment flexibility based on the accuracy-burden tradeoff appropriate for each use case.
 
 The computational efficiency of our approach is equally critical for deployment. Retraining population models to incorporate each new user is prohibitively expensive and scales poorly. In contrast, fine-tuning freezes the population model and adapts only to individual data, enabling parallel personalization across thousands of users with minimal computational overhead. Base models can be trained once on population data and cached, then rapidly fine-tuned for each new user on-device or in the cloud.
 
@@ -288,11 +329,11 @@ Domain adaptation techniques could theoretically reduce the need for individual 
 
 \subsection{Limitations and Future Directions}
 
-Several limitations warrant consideration. Our study evaluated \nParticipants~participants over 14-day periods—larger cohorts with longer monitoring would strengthen generalizability claims. The self-reported smoking annotations, while practical, may contain labeling errors or temporal misalignments. Button-press timing may not perfectly align with actual smoking bout boundaries, introducing noise into training labels. Future work could explore alternative labeling strategies or semi-supervised methods that leverage unlabeled data.
+Several limitations warrant consideration. Our study evaluated \nParticipants~participants over \collectionPeriodDays-day periods—larger cohorts with longer monitoring would strengthen generalizability claims. The self-reported smoking annotations, while practical, may contain labeling errors or temporal misalignments. Button-press timing may not perfectly align with actual smoking bout boundaries, introducing noise into training labels. Future work could explore alternative labeling strategies or semi-supervised methods that leverage unlabeled data.
 
 Our models were trained and evaluated on wrist-worn accelerometer and gyroscope data from a specific device. Generalization across different wearable form factors (arm bands, chest straps, rings) and sensor modalities remains to be established. Cross-device transfer learning could extend our approach to heterogeneous wearable ecosystems.
 
-The optimal amount of individual data required for personalization likely varies across users. Some individuals may achieve strong performance with less than 6 hours of data, while others may benefit from additional examples. Adaptive data collection strategies that dynamically determine when sufficient personalization has been achieved could further reduce burden.
+The optimal amount of individual data required for personalization likely varies across users. Some individuals may achieve strong performance with less than \fivePctDataHours~hours of data, while others may benefit from additional examples. Adaptive data collection strategies that dynamically determine when sufficient personalization has been achieved could further reduce burden.
 
 We evaluated smoking detection specifically, but the underlying challenge—personalized behavioral sensing with limited individual data—spans many applications. Transfer learning for personalized activity recognition, dietary monitoring, medication adherence tracking, and other health behaviors represents important future directions. The data efficiency gains demonstrated here should generalize to these domains, though empirical validation is necessary.
 
@@ -302,7 +343,7 @@ Smoking cessation interventions enabled by personalized detection could reduce t
 
 Beyond smoking, this work establishes a generalizable framework for personalized behavioral sensing in precision health. The fundamental principle—leverage population knowledge to accelerate individual adaptation—applies broadly to wearable health monitoring, digital therapeutics, and adaptive intervention systems. As wearable sensors become ubiquitous and health interventions increasingly personalized, data-efficient transfer learning provides a practical pathway for deploying personalized sensing at scale.
 
-\bibliographystyle{unsrt}
-\bibliography{references}
+% \bibliographystyle{unsrt}
+% \bibliography{references}
 
 \end{document}

@@ -35,16 +35,16 @@ GRID_PARAMS = {
     'use_residual': [False],  # Enable residual connections
     'dropout': [0.5],  # 0.0 = no dropout, 0.5 = standard dropout
     'mode': ['target_only_fine_tuning','target_only'],
-    'target_data_pct': [1],
+    'target_data_pct': [.01,.05,.1,.25,.5,1],
     'n_base_participants': ['all'],
-    'pos_weight': [2,5,10,15]
+    'pos_weight': [1]
 }
 
 # Fixed parameters
 FIXED_PARAMS = {
     'model': 'test',
     'data_path': 'data/002_60s_windowsplit',
-    'participants': ['alsaad','anam','asfik','dennis','ejaz','iftakhar','karen_redo','kerry','ritwik','tonmoy','twp5','unk1','will'],
+    'participants': ['alsaad','anam','asfik','ashlin','dennis','ejaz','iftakhar','karen_redo','kerry','mariah','ritwik','stephanie','tj','tonmoy','twp5','unk1','will'],
     'window_size': 3000,
     'use_augmentation': True,
     'jitter_std': 0.005,

@@ -665,10 +665,6 @@ INPUT ../figure5.pdf
 INPUT ../figure5.pdf
 INPUT ../figure5.pdf
 INPUT ../figure5.pdf
-INPUT ./manuscript.bbl
-INPUT manuscript.bbl
-INPUT ./manuscript.bbl
-INPUT manuscript.bbl
 INPUT manuscript.aux
 INPUT ./manuscript.out
 INPUT ./manuscript.out
