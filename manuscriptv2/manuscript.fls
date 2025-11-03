@@ -665,6 +665,11 @@ INPUT ../figure5.pdf
 INPUT ../figure5.pdf
 INPUT ../figure5.pdf
 INPUT ../figure5.pdf
+INPUT ./manuscript.bbl
+INPUT manuscript.bbl
+INPUT ./manuscript.bbl
+INPUT manuscript.bbl
+INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/cm/cmti10.tfm
 INPUT manuscript.aux
 INPUT ./manuscript.out
 INPUT ./manuscript.out
@@ -688,5 +693,6 @@ INPUT /usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy6.pfb
 INPUT /usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb
 INPUT /usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb
 INPUT /usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy9.pfb
+INPUT /usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti10.pfb
 INPUT /usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb
 INPUT /usr/share/texmf/fonts/type1/public/cm-super/sfrm1000.pfb
